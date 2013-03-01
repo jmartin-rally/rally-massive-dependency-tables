@@ -1,4 +1,4 @@
-  <!DOCTYPE html>
+<!DOCTYPE html>
 <html>
 <head>
     <title>Dependency Report</title>
@@ -14,14 +14,17 @@
                 extend: 'Rally.app.App',
                 componentCls: 'app',
                 items: [
-                        { xtype: 'container', itemId: 'table_box' }
+                        { xtype: 'container', itemId: 'selector_box', padding: 15, defaults: { padding: 15 }, html: "--selectors to be supplied--" },
+                        { xtype: 'container', itemId: 'table_box', defaults: { padding: 5 } }
                     ],
                 our_hash: {}, /* key is object id, content is the story from our project associated with that object id */
                 other_hash: {}, /* key is object id, content is the story associated with that object id */
                 timebox_hash: {}, /* key is object id of iteration or release. Changed both to have EndDate */
+                project_hash: {}, /* key is object id of projecs */
                 launch: function() {
                     var me = this;
-                	me._getSuccessors();
+                    me._getBaseData();
+                	//me._getDependencies();
                 },
                 log: function( msg ) {
                 	var me = this;
@@ -31,12 +34,90 @@
                 		window.console && console.log( new Date(), msg );
             //    	}
                 },
-                _getSuccessors: function() {
+                /**
+                 * We can't send a very long query, so we'll get our timeboxes and other stories first.  
+                 * 
+                 */
+                _getBaseData: function() {
+                    this._getProjects();
+                },
+                _getDependencies: function() {
+                    this._getOurItems("Successors");
+                    this._getOurItems("Predecessors");
+                },
+                _getProjects: function() {
+                    var me = this;
+                    me.log( "_getProjects");
+                    Ext.create('Rally.data.WsapiDataStore',{
+                        context: {project: null},
+                        autoLoad: true,
+                        model: 'Project',
+                        limit: 5000,
+                        fetch: [ 'ObjectID', 'Name' ],
+                        filters: { property: "State", operator: "!=", value: "Closed" },
+                        listeners: {
+                            load: function( store, data, success ) {
+                                var data_length = data.length;
+                                me.log( data_length );
+                                for ( var i=0; i<data_length; i++ ) {
+                                    me.project_hash[ data[i].get('ObjectID') ] = { Name: data[i].get('Name') };
+                                }
+                                me._getTimeboxes();
+                            }
+                        }
+                    });
+                },
+                _getTimeboxes: function() {
+                    var me = this;
+                    me.log( "_getTimeboxes" );
+                    Ext.create('Rally.data.WsapiDataStore',{
+                        context: {project: null},
+                        autoLoad: true,
+                        model: 'Release',
+                        limit: 5000,
+                        fetch: [ 'ObjectID', 'ReleaseDate' ],
+                        filters: { property: "ObjectID", operator: ">", value: 0 },
+                        listeners: {
+                            load: function( store, data, success ) {
+                                var data_length = data.length;
+                                me.log( data_length );
+                                for ( var i=0; i<data_length; i++ ) {
+                                    me.timebox_hash[ data[i].get('ObjectID') ] = { EndDate: data[i].get('ReleaseDate') };
+                                }
+                                me._getIterations();
+                            }
+                        }
+                    });
+                },
+                _getIterations: function() {
+                    var me = this;
+                    me.log( "_getIterations " );
+                    
+                    Ext.create('Rally.data.WsapiDataStore',{
+                        context: { project: null },
+                        autoLoad: true,
+                        limit: 5000,
+                        model: 'Iteration',
+                        fetch: [ 'ObjectID', 'EndDate' ],
+                        filters: { property: "ObjectID", operator: ">", value: 0 },
+                        listeners: {
+                            load: function( store, data, success ) {
+                                var data_length = data.length;
+                                me.log( data_length );
+                                for ( var i=0; i<data_length; i++ ) {
+                                    me.timebox_hash[ data[i].get('ObjectID') ] = { EndDate: data[i].get('EndDate') };
+                                }
+                                me._getDependencies();
+                            }
+                        }
+                    });
+                },
+                _getOurItems: function( type ) {
                 	var me  = this;
                 	Ext.create('Rally.data.lookback.SnapshotStore',{
                 		autoLoad: true,
                 		limit: 1000,
-                		fetch: ['Name','_ItemHierarchy','Successors', 'ScheduleState', 'Project', 'Iteration', 'Release' ],
+                		fetch: ['Name','_ItemHierarchy',type, 'ScheduleState', 'Project', 'Iteration', 'Release', '_UnformattedID' ],
                         hydrate: [ 'ScheduleState' ],
                 		filters: [ {
             	        	  property: '__At',
@@ -44,7 +125,7 @@
             	        	  value: 'current'
             	          },
             	          {
-            	        	  property: 'Successors',
+            	        	  property: type,
             	        	  operator: '!=',
             	        	  value: null
             	          },
@@ -55,27 +136,34 @@
             	          }],
                 		listeners: {
                 			load: function( store, data, success ) {
-                				me._createRowPerDependency( "Successors", data );
+                				me._createRowPerDependency( type, data );
                 			}
                 		}
                 	});
                 },
                 _createRowPerDependency: function( type, data ) {
                     var me = this;
-                    me.log( [ "got " + type, data.length ] );
-                    me.log(data);
+                    me.log( [ "_createRowPerDependency " + type, data.length ] );
                     var number_of_items_with_dependencies = data.length;
                     var rows = [];
+                    
+                    var direction = "Provides";
+                    if ( type === "Predecessors" ) {
+                        direction = "Receives";
+                    }
+                    
                     for ( var i=0; i<number_of_items_with_dependencies; i++ ) {
                         var dependent_ids = data[i].get(type);
-                        me.log( [ type + "s", dependent_ids ] );
                         me.our_hash[ data[i].get('ObjectID') ] = data[i].data;
                         
                         for ( var j=0; j< dependent_ids.length; j++ ) {
             		        rows.push({
-            		            direction: 'Provides',
-            		            project: 'tbd',
-            		            name: data[i].get('Name'),
+                                epic: false,
+                                epic_report: "",
+                                object_id: data[i].get('ObjectID'),
+            		            direction: direction,
+            		            project: data[i].get('Project'),
+            		            name: "US" + data[i].get('_UnformattedID') + ": " + data[i].get('Name') ,
             		            schedule_state: data[i].get('ScheduleState'),
             		            release: data[i].get('Release'),
             		            iteration: data[i].get('Iteration'),
@@ -85,6 +173,8 @@
                                 other_id: dependent_ids[j],
             		            other_project: 'tbd',
             		            other_name: 'tbd',
+                                other_epic: false,
+                                other_epic_report: "",
             		            other_schedule_state: 'tbd',
             		            other_release: null,
             		            other_iteration: null,
@@ -95,47 +185,142 @@
                         }
                     }
                     me.log( ["rows",rows, "our_hash", me.our_hash ] );
-                    me._getOtherData(type, rows);
+                    me._getLeaves( type,rows );
                 },
-                _getOtherData: function(type, rows) {
+            /**
+             * having trouble when we have more than 300 items to look for at once
+             */
+                _getLeaves: function(type,rows) {
                     var me = this;
-                    me.log("_getOtherData (data from the other side of the dependency arrows " + type);
-                    var item_length = rows.length;
-                    var query = null;
-                    var other_id_array = [];
-                    for ( var i=0;i<item_length;i++ ) {
-                        var item = rows[i];
-                        if ( item.other_id ) {
-                            other_id_array.push( item.other_id );
+                    me.log("_getLeaves: " + type);     
+                    var row_length = rows.length;
+                    var very_long_array = [];
+                    for ( var i=0;i<row_length;i++ ) {
+                        very_long_array.push(rows[i].object_id);
+                        very_long_array.push(rows[i].other_id);   
+                    }
+                    me._doNestedLeavesArray( type, rows, very_long_array, 0 );         
+                },
+                _doNestedLeavesArray: function( type, rows, very_long_array, start_index ) {
+                    var me = this;
+                    me.log( [ "_doNestedArray", start_index, very_long_array ] );
+                    var gap = 300;
+                    var sliced_array = very_long_array.slice(start_index, start_index + gap);
+                    
+                    var query = Ext.create('Rally.data.lookback.QueryFilter',{
+                        property: '_ItemHierarchy', operator: 'in', value: sliced_array
+                    }).and( Ext.create('Rally.data.lookback.QueryFilter',{
+                        property: '_TypeHierarchy', operator: '=', value: "HierarchicalRequirement"
+                    })).and( Ext.create('Rally.data.lookback.QueryFilter',{
+                        property: 'Children', operator: '=', value: null
+                    }));
+                    query = query.and(Ext.create('Rally.data.lookback.QueryFilter',{property: '__At', operator: '=',value: 'current' }));
+                    Ext.create('Rally.data.lookback.SnapshotStore',{
+                        autoLoad: true,
+                        limit: gap,
+                        fetch: ['Name', '_ItemHierarchy', 'Iteration', 'Release' ],
+                        filters: query,
+                        listeners: {
+                            load: function( store, data, success ) {
+                                var data_length = data.length;
+                                me.log( "load leaves snapshot" );
+                                for ( var i=0;i<data_length;i++ ) {
+                                    // only care if this is the child of one we already got
+                                    if ( data[i].get('_ItemHierarchy').length > 1 ) {
+                                        var top_id = data[i].get('_ItemHierarchy')[0];
+                                        var bottom_id = data[i].get('ObjectID');
+                                        if ( me.our_hash[ top_id ] ) {
+                                            if ( ! me.our_hash[top_id].children ) {
+                                                me.our_hash[top_id].scheduled_children = [];
+                                                me.our_hash[top_id].children = [];
+                                            }
+                                            if ( me.our_hash[top_id].children.indexOf(bottom_id) ==-1 ) {
+                                                me.our_hash[top_id].children.push( bottom_id );
+            	                                if ( ( data[i].get('Iteration') ) || ( data[i].get('Release') ) ) {
+            	                                    me.our_hash[top_id].scheduled_children.push( bottom_id );
+            	                                }
+                                            }
+                                        } else if ( me.other_hash[top_id] ) {
+                                            if ( ! me.other_hash[top_id].children ) {
+                                                me.other_hash[top_id].scheduled_children = [];
+                                                me.other_hash[top_id].children = [];
+                                            }
+                                            if ( me.other_hash[top_id].children.indexOf(bottom_id) ==-1 ) {
+                                                me.other_hash[top_id].children.push( bottom_id );
+                                                if ( ( data[i].get('Iteration') ) || ( data[i].get('Release') ) ) {
+                                                    me.other_hash[top_id].scheduled_children.push( bottom_id );
+                                                }
+                                            }
+                                        } else {
+                                            me.other_hash[top_id] = {
+                                                scheduled_children: [],
+                                                children: [bottom_id]
+                                            };
+                                            if ( ( data[i].get('Iteration') ) || ( data[i].get('Release') ) ) {
+                                                me.other_hash[top_id].scheduled_children.push( bottom_id );
+                                            }
+                                        }
+                                    }
+                                }
+                                start_index = start_index + gap;
+                                if ( start_index < very_long_array.length ) {
+                                    me._doNestedLeavesArray( type, rows, very_long_array, start_index );
+                                } else {
+                                    me._getOtherData(type,rows);
+                                }
+                            }
                         }
+                    });
+                },    
+                /**
+                 * having trouble when we have more than 300 items to look for at once
+                 */
+                _getOtherData: function(type,rows) {
+                    var me = this;
+                    me.log("_getOtherData " + type);
+            //        
+                    var row_length = rows.length;
+                    var other_id_array = [];
+                    for ( var i=0;i<row_length;i++ ) {
+                        other_id_array.push(rows[i].other_id);   
                     }
                     
-                    if ( other_id_array.length === 0 ) {
-                        me._getTimeboxes(type,rows);
-                    } else {
-                        me.log( [ "other id array", other_id_array.length ]);
-                        var query = Ext.create('Rally.data.lookback.QueryFilter',{
-                            property: 'ObjectID', operator: 'in', value: other_id_array
-                        });
-                        query = query.and(Ext.create('Rally.data.lookback.QueryFilter',{property: '__At', operator: '=',value: 'current' }));
-            			Ext.create('Rally.data.lookback.SnapshotStore',{
-            	            autoLoad: true,
-            	            limit: 1000,
-            	            fetch: ['Name','_ItemHierarchy', 'ScheduleState', 'Project', 'Iteration', 'Release' ],
-            	            hydrate: [ 'ScheduleState' ],
-            	            filters: query,
-            	            listeners: {
-            	                load: function( store, data, success ) {
-                                    var data_length = data.length;
-                                    for ( var i=0;i<data_length;i++ ) {
+                    me._doNestedOtherArray( type, rows, other_id_array, 0 ); 
+                },
+                _doNestedOtherArray: function( type, rows, other_id_array, start_index ) {
+                    var me = this;
+                    var gap = 300;
+                    var sliced_array = other_id_array.slice(start_index, start_index + gap);
+                    
+                    var query = Ext.create('Rally.data.lookback.QueryFilter',{
+                        property: 'ObjectID', operator: 'in', value: sliced_array
+                    });
+                    query = query.and(Ext.create('Rally.data.lookback.QueryFilter',{property: '__At', operator: '=',value: 'current' }));
+                    Ext.create('Rally.data.lookback.SnapshotStore',{
+                        autoLoad: true,
+                        limit: gap,
+                        fetch: ['Name','_ItemHierarchy', 'ScheduleState', 'Project', 'Iteration', 'Release' ],
+                        hydrate: [ 'ScheduleState' ],
+                        filters: query,
+                        listeners: {
+                            load: function( store, data, success ) {
+                                var data_length = data.length;
+                                for ( var i=0;i<data_length;i++ ) {
+                                    if ( ! me.other_hash[data[i].get('ObjectID')] ) {
                                         me.other_hash[ data[i].get('ObjectID') ] = data[i].data;
+                                    } else {
+                                        me.other_hash[ data[i].get('ObjectID')] = Ext.Object.merge(me.other_hash[ data[i].get('ObjectID')], data[i].data );
                                     }
-                                    me.log( ["other hash", me.other_hash ]);
-                                    me._getTimeboxes(type,rows);
-            	                }
-            	            }
-            	        });
-                    }
+                                }
+                                start_index = start_index + gap;
+                                if ( start_index < other_id_array.length ) {
+                                    me._doNestedOtherArray( type, rows, other_id_array, start_index );
+                                } else {
+                                    me._populateRowData(type,rows);
+                                }
+                            }
+                        }
+                    });
                 },
                 _addToTimeboxFilter: function( query, value ) {
                     var single_query = Ext.create('Rally.data.QueryFilter', {
@@ -151,84 +336,9 @@
                     
                     return query;
                 },
-                _getTimeboxes: function( type, rows ) {
-                    var me = this;
-                    me.log( "_getTimeboxes: " + type );
-                    var item_length = rows.length;
-                    
-                    var query = null;
-                    for ( var i=0;i<item_length; i++ ) {
-                        if ( rows[i].release ) {
-                            query = me._addToTimeboxFilter( query, rows[i].release );
-                        }
-                    }
-                    for ( var i in me.other_hash ) {
-                        if ( me.other_hash.hasOwnProperty(i) ) {
-                            if ( me.other_hash[i].Release ) {
-                                query = me._addToTimeboxFilter(query, me.other_hash[i].Release );
-                            }
-                        }
-                    }
-                    if ( query ) {
-                        Ext.create('Rally.data.WsapiDataStore',{
-                            context: {project: null},
-                            autoLoad: true,
-                            model: 'Release',
-                            fetch: [ 'ObjectID', 'ReleaseDate' ],
-                            filters: query,
-                            listeners: {
-                                load: function( store, data, success ) {
-                                    var data_length = data.length;
-                                    for ( var i=0; i<data_length; i++ ) {
-                                        me.timebox_hash[ data[i].get('ObjectID') ] = { EndDate: data[i].get('ReleaseDate') };
-                                    }
-                                    me._getIterations(type, rows);
-                                }
-                            }
-                        });
-                    } else {
-                        me._getIterations(type, rows);
-                    }
-                },
-                _getIterations: function(type,rows) {
-                    var me = this;
-                    me.log( "_getIterations: " + type );
-                    var item_length = rows.length;
-                    
-                    var query = null;
-                    for ( var i=0;i<item_length; i++ ) {
-                        if ( rows[i].iteration ) {
-                            query = me._addToTimeboxFilter( query, rows[i].iteration );
-                        }
-                    }
-                    for ( var i in me.other_hash ) {
-                        if ( me.other_hash.hasOwnProperty(i) ) {
-                            if ( me.other_hash[i].Iteration ) {
-                                query = me._addToTimeboxFilter(query, me.other_hash[i].Iteration );
-                            }
-                        }
-                    }        
-                    if ( query ) {
-                        Ext.create('Rally.data.WsapiDataStore',{
-                            context: { project: null },
-                            autoLoad: true,
-                            model: 'Iteration',
-                            fetch: [ 'ObjectID', 'EndDate' ],
-                            filters: query,
-                            listeners: {
-                                load: function( store, data, success ) {
-                                    var data_length = data.length;
-                                    for ( var i=0; i<data_length; i++ ) {
-                                        me.timebox_hash[ data[i].get('ObjectID') ] = { EndDate: data[i].get('EndDate') };
-                                    }
-                                    me._populateRowData(type,rows);
-                                }
-                            }
-                        });
-                    }
-                },
                 _populateRowData: function( type, rows ) {
                     this.log( "_populateRowData: " + type );
+                    this.log( [ "other_hash", this.other_hash ]);
                     var item_length = rows.length;
                     for ( var i=0; i<item_length; i++ ) {
                         var item = rows[i];
@@ -238,12 +348,41 @@
                         if (( item.release !== "" ) && ( this.timebox_hash[item.release] )) {
                             item.release_date = this.timebox_hash[item.release].EndDate;
                         }
+                        if (( item.project ) && (this.project_hash[item.project])) {
+                            item.project = this.project_hash[item.project].Name;
+                        } else { 
+                            item.project = "Unknown " + item.project;
+                        }
+                        
+                        if ( ( this.our_hash[ item.object_id ] ) && ( this.our_hash[item.object_id].children )) {
+                            var total_kids = this.our_hash[item.object_id].children.length;
+                            var scheduled_kids = this.our_hash[item.object_id].scheduled_children.length;
+                            item.epic = true;
+                            item.epic_report = scheduled_kids + " of " + total_kids;
+                        }
+                        
+                        
                         
                         if ((item.other_id) && (this.other_hash[item.other_id])) {
                             var other = this.other_hash[item.other_id];
                             item.other_name = other.Name;
                             item.other_schedule_state = other.ScheduleState;
                         
+                            if ( other.Project ) {
+                                if ( this.project_hash[ other.Project ] ) {
+                                    item.other_project = this.project_hash[other.Project].Name;
+                                } else {
+                                    item.other_project = "Unknown " + other.Project;
+                                }
+                            }
+                            
+                            if ( other.children ) {
+                                var total_kids = other.children.length;
+            	                var scheduled_kids = other.scheduled_children.length;
+            	                item.other_epic = true;
+            	                item.other_epic_report = scheduled_kids + " of " + total_kids;
+                            }
+                            
             	            if (( other.Iteration ) && ( this.timebox_hash[other.Iteration] )) {
             	                item.other_iteration_date = this.timebox_hash[other.Iteration].EndDate;
             	            }
@@ -260,11 +399,13 @@
                     var cols = [
                             { id: 'direction', label: 'Your Team...', type: 'string' },
                             { id: 'project', label: 'Team', type: 'string' },
+                            { id: 'epic_report', label: 'Epic', type: 'string' },
                             { id: 'name', label: 'Our Story', type: 'string' },
                             { id: 'schedule_state', label: 'State', type: 'string' },
                             { id: 'release_date', label: 'Release Date', type: 'date' },
                             { id: 'iteration_date', label: 'Iteration Date', type: 'date' },
-                            { id: 'other_project', label: 'Other Project', type: 'string' },
+                            { id: 'other_project', label: 'Other Team', type: 'string' },
+                            { id: 'other_epic_report', label: 'Epic', type: 'string' },
                             { id: 'other_name', label: 'Their Story', type: 'string' },
                             { id: 'other_schedule_state', label: 'State', type: 'string' },
                             { id: 'other_release_date', label: 'Release Date', type: 'date' },
@@ -282,7 +423,6 @@
                         Ext.Array.each( cols, function(column) {
                             table_row.push( rows[i][column.id] );
                         });
-                        me.log( table_row );
                         data_table.addRow(table_row);
                     }
                     
@@ -290,6 +430,11 @@
                     var outer_box_id = type + '_box';
                     
                     if ( me.down('#' + outer_box_id ) ) { me.down('#'+outer_box_id).destroy(); }
+                    if ( type === "Successors" ) {
+                        me.down('#table_box').add( { xtype: 'container', html: "<h1>Your team delivering stories to other teams</h1>" } );
+                    } else {
+                        me.down('#table_box').add( { xtype: 'container', html: "<h1>Your team receiving stories from other teams</h1>" } );
+                    }
                     me.down('#table_box').add( { xtype: 'container', itemId: outer_box_id, id: outer_box_id } );
                     
                     var table = new google.visualization.Table( document.getElementById(outer_box_id) );

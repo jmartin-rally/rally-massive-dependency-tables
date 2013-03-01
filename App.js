@@ -326,6 +326,7 @@ Ext.define('CustomApp', {
     },
     _populateRowData: function( type, rows ) {
         this.log( "_populateRowData: " + type );
+        this.log( [ "other_hash", this.other_hash ]);
         var item_length = rows.length;
         for ( var i=0; i<item_length; i++ ) {
             var item = rows[i];
@@ -336,7 +337,6 @@ Ext.define('CustomApp', {
                 item.release_date = this.timebox_hash[item.release].EndDate;
             }
             if (( item.project ) && (this.project_hash[item.project])) {
-                this.log( this.project_hash[item.project] );
                 item.project = this.project_hash[item.project].Name;
             } else { 
                 item.project = "Unknown " + item.project;
@@ -356,6 +356,14 @@ Ext.define('CustomApp', {
                 item.other_name = other.Name;
                 item.other_schedule_state = other.ScheduleState;
             
+                if ( other.Project ) {
+                    if ( this.project_hash[ other.Project ] ) {
+                        item.other_project = this.project_hash[other.Project].Name;
+                    } else {
+                        item.other_project = "Unknown " + other.Project;
+                    }
+                }
+                
                 if ( other.children ) {
                     var total_kids = other.children.length;
 	                var scheduled_kids = other.scheduled_children.length;
