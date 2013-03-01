@@ -219,6 +219,8 @@ Ext.define('CustomApp', {
                             var bottom_id = data[i].get('ObjectID');
                             if ( me.our_hash[ top_id ] ) {
                                 if ( ! me.our_hash[top_id].children ) {
+                                    me.our_hash[top_id].children_releases = [];
+                                    me.our_hash[top_id].children_iterations = [];
                                     me.our_hash[top_id].scheduled_children = [];
                                     me.our_hash[top_id].children = [];
                                 }
@@ -226,10 +228,18 @@ Ext.define('CustomApp', {
                                     me.our_hash[top_id].children.push( bottom_id );
 	                                if ( ( data[i].get('Iteration') ) || ( data[i].get('Release') ) ) {
 	                                    me.our_hash[top_id].scheduled_children.push( bottom_id );
+                                        if (data[i].get('Iteration')) {
+                                            me.our_hash[top_id].children_iterations.push(data[i].get('Iteration'));
+                                        }
+                                        if (data[i].get('Release')) {
+                                            me.our_hash[top_id].children_releases.push(data[i].get('Release'));
+                                        }
 	                                }
                                 }
                             } else if ( me.other_hash[top_id] ) {
                                 if ( ! me.other_hash[top_id].children ) {
+                                    me.other_hash[top_id].children_releases = [];
+                                    me.other_hash[top_id].children_iterations = [];
                                     me.other_hash[top_id].scheduled_children = [];
                                     me.other_hash[top_id].children = [];
                                 }
@@ -237,15 +247,29 @@ Ext.define('CustomApp', {
                                     me.other_hash[top_id].children.push( bottom_id );
                                     if ( ( data[i].get('Iteration') ) || ( data[i].get('Release') ) ) {
                                         me.other_hash[top_id].scheduled_children.push( bottom_id );
+                                        if (data[i].get('Iteration')) {
+                                            me.other_hash[top_id].children_iterations.push(data[i].get('Iteration'));
+                                        }
+                                        if (data[i].get('Release')) {
+                                            me.other_hash[top_id].children_releases.push(data[i].get('Release'));
+                                        }
                                     }
                                 }
                             } else {
                                 me.other_hash[top_id] = {
                                     scheduled_children: [],
-                                    children: [bottom_id]
+                                    children: [bottom_id],
+                                    children_releases: [],
+                                    children_iterations: []
                                 };
                                 if ( ( data[i].get('Iteration') ) || ( data[i].get('Release') ) ) {
                                     me.other_hash[top_id].scheduled_children.push( bottom_id );
+                                    if (data[i].get('Iteration')) {
+                                            me.other_hash[top_id].children_iterations.push(data[i].get('Iteration'));
+                                        }
+                                        if (data[i].get('Release')) {
+                                            me.other_hash[top_id].children_releases.push(data[i].get('Release'));
+                                        }
                                 }
                             }
                         }
@@ -325,6 +349,7 @@ Ext.define('CustomApp', {
         return query;
     },
     _populateRowData: function( type, rows ) {
+        var me = this;
         this.log( "_populateRowData: " + type );
         this.log( [ "other_hash", this.other_hash ]);
         var item_length = rows.length;
@@ -347,10 +372,22 @@ Ext.define('CustomApp', {
                 var scheduled_kids = this.our_hash[item.object_id].scheduled_children.length;
                 item.epic = true;
                 item.epic_report = scheduled_kids + " of " + total_kids;
+//                                                    me.our_hash[top_id].children_releases = [];
+//                                    me.our_hash[top_id].children_iterations = [];
+                var releases = this.our_hash[item.object_id].children_releases;
+                Ext.Array.each( releases, function( release ) {
+                    if (( me.timebox_hash[release] ) && ( me.timebox_hash[release].EndDate > item.release_date )) {
+                        item.release_date = me.timebox_hash[release].EndDate;
+                    }
+                });
+                var iterations = this.our_hash[item.object_id].children_iterations;
+                Ext.Array.each( iterations, function( iteration ) {
+                    if (( me.timebox_hash[iteration] ) && ( me.timebox_hash[iteration].EndDate > item.iteration_date )) {
+                        item.iteration_date = me.timebox_hash[iteration].EndDate;
+                    }
+                });
             }
-            
-            
-            
+                        
             if ((item.other_id) && (this.other_hash[item.other_id])) {
                 var other = this.other_hash[item.other_id];
                 item.other_name = other.Name;
@@ -377,6 +414,19 @@ Ext.define('CustomApp', {
 	            if (( other.Release ) && ( this.timebox_hash[other.Release] )) {
 	                item.other_release_date = this.timebox_hash[other.Release].EndDate;
 	            }
+                
+                var releases = other.children_releases;
+                Ext.Array.each( releases, function(release) {
+                    if ((me.timebox_hash[release]) && ( me.timebox_hash[release].EndDate > item.other_release_date)) {
+                        item.other_release_date = me.timebox_hash[release].EndDate;
+                    }
+                });
+                var iterations = other.children_iterations;
+                Ext.Array.each( iterations, function(iteration) {
+                    if ((me.timebox_hash[iteration]) && ( me.timebox_hash[iteration].EndDate > item.other_iteration_date)) {
+                        item.other_iteration_date = me.timebox_hash[iteration].EndDate;
+                    }
+                });
             }
         }
         this._makeTable( type, rows );
