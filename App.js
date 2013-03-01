@@ -2,14 +2,16 @@ Ext.define('CustomApp', {
     extend: 'Rally.app.App',
     componentCls: 'app',
     items: [
-            { xtype: 'container', itemId: 'table_box' }
+            { xtype: 'container', itemId: 'selector_box', padding: 15, defaults: { padding: 15 }, html: "--selectors to be supplied--" },
+            { xtype: 'container', itemId: 'table_box', defaults: { padding: 5 } }
         ],
     our_hash: {}, /* key is object id, content is the story from our project associated with that object id */
     other_hash: {}, /* key is object id, content is the story associated with that object id */
     timebox_hash: {}, /* key is object id of iteration or release. Changed both to have EndDate */
     launch: function() {
         var me = this;
-    	me._getSuccessors();
+        me._getBaseData();
+    	//me._getDependencies();
     },
     log: function( msg ) {
     	var me = this;
@@ -19,12 +21,68 @@ Ext.define('CustomApp', {
     		window.console && console.log( new Date(), msg );
 //    	}
     },
-    _getSuccessors: function() {
+    /**
+     * We can't send a very long query, so we'll get our timeboxes and other stories first.  
+     * 
+     */
+    _getBaseData: function() {
+        this._getTimeboxes();
+    },
+    _getDependencies: function() {
+        this._getOurItems("Successors");
+        this._getOurItems("Predecessors");
+    },
+    _getTimeboxes: function() {
+        var me = this;
+        me.log( "_getTimeboxes" );
+        Ext.create('Rally.data.WsapiDataStore',{
+            context: {project: null},
+            autoLoad: true,
+            model: 'Release',
+            limit: 5000,
+            fetch: [ 'ObjectID', 'ReleaseDate' ],
+            filters: { property: "ObjectID", operator: ">", value: 0 },
+            listeners: {
+                load: function( store, data, success ) {
+                    var data_length = data.length;
+                    me.log( data_length );
+                    for ( var i=0; i<data_length; i++ ) {
+                        me.timebox_hash[ data[i].get('ObjectID') ] = { EndDate: data[i].get('ReleaseDate') };
+                    }
+                    me._getIterations();
+                }
+            }
+        });
+    },
+    _getIterations: function() {
+        var me = this;
+        me.log( "_getIterations " );
+        
+        Ext.create('Rally.data.WsapiDataStore',{
+            context: { project: null },
+            autoLoad: true,
+            limit: 5000,
+            model: 'Iteration',
+            fetch: [ 'ObjectID', 'EndDate' ],
+            filters: { property: "ObjectID", operator: ">", value: 0 },
+            listeners: {
+                load: function( store, data, success ) {
+                    var data_length = data.length;
+                    me.log( data_length );
+                    for ( var i=0; i<data_length; i++ ) {
+                        me.timebox_hash[ data[i].get('ObjectID') ] = { EndDate: data[i].get('EndDate') };
+                    }
+                    me._getDependencies();
+                }
+            }
+        });
+    },
+    _getOurItems: function( type ) {
     	var me  = this;
     	Ext.create('Rally.data.lookback.SnapshotStore',{
     		autoLoad: true,
     		limit: 1000,
-    		fetch: ['Name','_ItemHierarchy','Successors', 'ScheduleState', 'Project', 'Iteration', 'Release' ],
+    		fetch: ['Name','_ItemHierarchy',type, 'ScheduleState', 'Project', 'Iteration', 'Release' ],
             hydrate: [ 'ScheduleState' ],
     		filters: [ {
 	        	  property: '__At',
@@ -32,7 +90,7 @@ Ext.define('CustomApp', {
 	        	  value: 'current'
 	          },
 	          {
-	        	  property: 'Successors',
+	        	  property: type,
 	        	  operator: '!=',
 	        	  value: null
 	          },
@@ -43,25 +101,29 @@ Ext.define('CustomApp', {
 	          }],
     		listeners: {
     			load: function( store, data, success ) {
-    				me._createRowPerDependency( "Successors", data );
+    				me._createRowPerDependency( type, data );
     			}
     		}
     	});
     },
     _createRowPerDependency: function( type, data ) {
         var me = this;
-        me.log( [ "got " + type, data.length ] );
-        me.log(data);
+        me.log( [ "_createRowPerDependency " + type, data.length ] );
         var number_of_items_with_dependencies = data.length;
         var rows = [];
+        
+        var direction = "Provides";
+        if ( type === "Predecessors" ) {
+            direction = "Receives";
+        }
+        
         for ( var i=0; i<number_of_items_with_dependencies; i++ ) {
             var dependent_ids = data[i].get(type);
-            me.log( [ type + "s", dependent_ids ] );
             me.our_hash[ data[i].get('ObjectID') ] = data[i].data;
             
             for ( var j=0; j< dependent_ids.length; j++ ) {
 		        rows.push({
-		            direction: 'Provides',
+		            direction: direction,
 		            project: 'tbd',
 		            name: data[i].get('Name'),
 		            schedule_state: data[i].get('ScheduleState'),
@@ -85,46 +147,54 @@ Ext.define('CustomApp', {
         me.log( ["rows",rows, "our_hash", me.our_hash ] );
         me._getOtherData(type, rows);
     },
-    _getOtherData: function(type, rows) {
+    /**
+     * having trouble when we have more than 300 items to look for at once
+     */
+    _getOtherData: function(type,rows) {
         var me = this;
-        me.log("_getOtherData (data from the other side of the dependency arrows " + type);
-        var item_length = rows.length;
-        var query = null;
-        for ( var i=0;i<item_length;i++ ) {
-            var item = rows[i];
-            if ( item.other_id ) {
-                var single_query = Ext.create('Rally.data.lookback.QueryFilter',{
-                    property: 'ObjectID', operator: '=', value: item.other_id
-                });
-                if ( query === null ) {
-                    query = single_query;
-                } else {
-                    query = query.or(single_query);
+        me.log("_getOtherData " + type);
+//        
+        var row_length = rows.length;
+        var other_id_array = [];
+        for ( var i=0;i<row_length;i++ ) {
+            other_id_array.push(rows[i].other_id);   
+        }
+        
+        me._doNestedOtherArray( type, rows, other_id_array, 0 ); 
+    },
+    _doNestedOtherArray: function( type, rows, other_id_array, start_index ) {
+        var me = this;
+        me.log( [ "_doNestedArray", start_index, other_id_array ] );
+        var gap = 300;
+        var sliced_array = other_id_array.slice(start_index, start_index + gap);
+        
+        var query = Ext.create('Rally.data.lookback.QueryFilter',{
+            property: 'ObjectID', operator: 'in', value: sliced_array
+        });
+        query = query.and(Ext.create('Rally.data.lookback.QueryFilter',{property: '__At', operator: '=',value: 'current' }));
+        me.log( sliced_array.length );
+        Ext.create('Rally.data.lookback.SnapshotStore',{
+            autoLoad: true,
+            limit: gap,
+            fetch: ['Name','_ItemHierarchy', 'ScheduleState', 'Project', 'Iteration', 'Release' ],
+            hydrate: [ 'ScheduleState' ],
+            filters: query,
+            listeners: {
+                load: function( store, data, success ) {
+                    var data_length = data.length;
+                    me.log( "load other snapshot" );
+                    for ( var i=0;i<data_length;i++ ) {
+                        me.other_hash[ data[i].get('ObjectID') ] = data[i].data;
+                    }
+                    start_index = start_index + gap;
+                    if ( start_index < other_id_array.length ) {
+                        me._doNestedOtherArray( type, rows, other_id_array, start_index );
+                    } else {
+                        me._populateRowData(type,rows);
+                    }
                 }
             }
-        }
-        if ( query === null ) {
-            me._getTimeboxes(type,rows);
-        } else {
-            query = query.and(Ext.create('Rally.data.lookback.QueryFilter',{property: '__At', operator: '=',value: 'current' }));
-			Ext.create('Rally.data.lookback.SnapshotStore',{
-	            autoLoad: true,
-	            limit: 1000,
-	            fetch: ['Name','_ItemHierarchy', 'ScheduleState', 'Project', 'Iteration', 'Release' ],
-	            hydrate: [ 'ScheduleState' ],
-	            filters: query,
-	            listeners: {
-	                load: function( store, data, success ) {
-                        var data_length = data.length;
-                        for ( var i=0;i<data_length;i++ ) {
-                            me.other_hash[ data[i].get('ObjectID') ] = data[i].data;
-                        }
-                        me.log( ["other hash", me.other_hash ]);
-                        me._getTimeboxes(type,rows);
-	                }
-	            }
-	        });
-        }
+        });
     },
     _addToTimeboxFilter: function( query, value ) {
         var single_query = Ext.create('Rally.data.QueryFilter', {
@@ -139,85 +209,6 @@ Ext.define('CustomApp', {
         }
         
         return query;
-    },
-    _getTimeboxes: function( type, rows ) {
-        var me = this;
-        me.log( "_getTimeboxes: " + type );
-        var item_length = rows.length;
-        
-        var query = null;
-        for ( var i=0;i<item_length; i++ ) {
-            if ( rows[i].release ) {
-                query = me._addToTimeboxFilter( query, rows[i].release );
-            }
-        }
-        for ( var i in me.other_hash ) {
-            if ( me.other_hash.hasOwnProperty(i) ) {
-                if ( me.other_hash[i].Release ) {
-                    query = me._addToTimeboxFilter(query, me.other_hash[i].Release );
-                }
-            }
-        }
-        if ( query ) {
-            Ext.create('Rally.data.WsapiDataStore',{
-                context: {project: null},
-                autoLoad: true,
-                model: 'Release',
-                fetch: [ 'ObjectID', 'ReleaseDate' ],
-                filters: query,
-                listeners: {
-                    load: function( store, data, success ) {
-                        var data_length = data.length;
-                        for ( var i=0; i<data_length; i++ ) {
-                            me.timebox_hash[ data[i].get('ObjectID') ] = { EndDate: data[i].get('ReleaseDate') };
-                        }
-                        me._getIterations(type, rows);
-                    }
-                }
-            });
-        } else {
-            me._getIterations(type, rows);
-        }
-    },
-    _getIterations: function(type,rows) {
-        var me = this;
-        me.log( "_getIterations: " + type );
-        var item_length = rows.length;
-        
-        var query = null;
-        for ( var i=0;i<item_length; i++ ) {
-            if ( rows[i].iteration ) {
-                query = me._addToTimeboxFilter( query, rows[i].iteration );
-            }
-        }
-        for ( var i in me.other_hash ) {
-            if ( me.other_hash.hasOwnProperty(i) ) {
-                if ( me.other_hash[i].Iteration ) {
-                    query = me._addToTimeboxFilter(query, me.other_hash[i].Iteration );
-                }
-            }
-        }
-        me.log( query.toString() );
-        
-        if ( query ) {
-            Ext.create('Rally.data.WsapiDataStore',{
-                context: { project: null },
-                autoLoad: true,
-                model: 'Iteration',
-                fetch: [ 'ObjectID', 'EndDate' ],
-                filters: query,
-                listeners: {
-                    load: function( store, data, success ) {
-                        var data_length = data.length;
-                        for ( var i=0; i<data_length; i++ ) {
-                            me.timebox_hash[ data[i].get('ObjectID') ] = { EndDate: data[i].get('EndDate') };
-                        }
-                        
-                        me._populateRowData(type,rows);
-                    }
-                }
-            });
-        }
     },
     _populateRowData: function( type, rows ) {
         this.log( "_populateRowData: " + type );
@@ -256,7 +247,7 @@ Ext.define('CustomApp', {
                 { id: 'schedule_state', label: 'State', type: 'string' },
                 { id: 'release_date', label: 'Release Date', type: 'date' },
                 { id: 'iteration_date', label: 'Iteration Date', type: 'date' },
-                { id: 'other_project', label: 'Other Project', type: 'string' },
+                { id: 'other_project', label: 'Other Team', type: 'string' },
                 { id: 'other_name', label: 'Their Story', type: 'string' },
                 { id: 'other_schedule_state', label: 'State', type: 'string' },
                 { id: 'other_release_date', label: 'Release Date', type: 'date' },
@@ -274,7 +265,6 @@ Ext.define('CustomApp', {
             Ext.Array.each( cols, function(column) {
                 table_row.push( rows[i][column.id] );
             });
-            me.log( table_row );
             data_table.addRow(table_row);
         }
         
@@ -282,6 +272,11 @@ Ext.define('CustomApp', {
         var outer_box_id = type + '_box';
         
         if ( me.down('#' + outer_box_id ) ) { me.down('#'+outer_box_id).destroy(); }
+        if ( type === "Successors" ) {
+            me.down('#table_box').add( { xtype: 'container', html: "<h1>Your team delivering stories to other teams</h1>" } );
+        } else {
+            me.down('#table_box').add( { xtype: 'container', html: "<h1>Your team receiving stories from other teams</h1>" } );
+        }
         me.down('#table_box').add( { xtype: 'container', itemId: outer_box_id, id: outer_box_id } );
         
         var table = new google.visualization.Table( document.getElementById(outer_box_id) );
