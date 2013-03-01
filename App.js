@@ -123,6 +123,9 @@ Ext.define('CustomApp', {
             
             for ( var j=0; j< dependent_ids.length; j++ ) {
 		        rows.push({
+                    epic: false,
+                    epic_report: "",
+                    object_id: data[i].get('ObjectID'),
 		            direction: direction,
 		            project: 'tbd',
 		            name: data[i].get('Name'),
@@ -135,6 +138,8 @@ Ext.define('CustomApp', {
                     other_id: dependent_ids[j],
 		            other_project: 'tbd',
 		            other_name: 'tbd',
+                    other_epic: false,
+                    other_epic_report: "",
 		            other_schedule_state: 'tbd',
 		            other_release: null,
 		            other_iteration: null,
@@ -145,8 +150,100 @@ Ext.define('CustomApp', {
             }
         }
         me.log( ["rows",rows, "our_hash", me.our_hash ] );
-        me._getOtherData(type, rows);
+        me._getLeaves( type,rows );
+        //me._getOtherData(type, rows);
     },
+/**
+ * having trouble when we have more than 300 items to look for at once
+ */
+    _getLeaves: function(type,rows) {
+        var me = this;
+        me.log("_getLeaves: " + type);     
+        var row_length = rows.length;
+        var very_long_array = [];
+        for ( var i=0;i<row_length;i++ ) {
+            very_long_array.push(rows[i].object_id);
+            very_long_array.push(rows[i].other_id);   
+        }
+        me._doNestedLeavesArray( type, rows, very_long_array, 0 );         
+    },
+    _doNestedLeavesArray: function( type, rows, very_long_array, start_index ) {
+        var me = this;
+        me.log( [ "_doNestedArray", start_index, very_long_array ] );
+        var gap = 300;
+        var sliced_array = very_long_array.slice(start_index, start_index + gap);
+        
+        var query = Ext.create('Rally.data.lookback.QueryFilter',{
+            property: '_ItemHierarchy', operator: 'in', value: sliced_array
+        }).and( Ext.create('Rally.data.lookback.QueryFilter',{
+            property: '_TypeHierarchy', operator: '=', value: "HierarchicalRequirement"
+        })).and( Ext.create('Rally.data.lookback.QueryFilter',{
+            property: 'Children', operator: '=', value: null
+        }));
+        query = query.and(Ext.create('Rally.data.lookback.QueryFilter',{property: '__At', operator: '=',value: 'current' }));
+        me.log( sliced_array.length );
+        Ext.create('Rally.data.lookback.SnapshotStore',{
+            autoLoad: true,
+            limit: gap,
+            fetch: ['Name', '_ItemHierarchy', 'Iteration', 'Release' ],
+            filters: query,
+            listeners: {
+                load: function( store, data, success ) {
+                    var data_length = data.length;
+                    me.log( "load leaves snapshot" );
+                    me.log( data );
+                    for ( var i=0;i<data_length;i++ ) {
+                        // only care if this is the child of one we already got
+                        if ( data[i].get('_ItemHierarchy').length > 1 ) {
+                            me.log( data[i].get('_ItemHierarchy') );
+                            var top_id = data[i].get('_ItemHierarchy')[0];
+                            var bottom_id = data[i].get('ObjectID');
+                            if ( me.our_hash[ top_id ] ) {
+                                me.log( "adding child to our: " + top_id );
+                                if ( ! me.our_hash[top_id].children ) {
+                                    me.our_hash[top_id].scheduled_children = [];
+                                    me.our_hash[top_id].children = [];
+                                }
+                                if ( me.our_hash[top_id].children.indexOf(bottom_id) ==-1 ) {
+                                    me.our_hash[top_id].children.push( bottom_id );
+	                                if ( ( data[i].get('Iteration') ) || ( data[i].get('Release') ) ) {
+	                                    me.our_hash[top_id].scheduled_children.push( bottom_id );
+	                                }
+                                }
+                            } else if ( me.other_hash[top_id] ) {
+                                me.log( "in the other hash: " + top_id );
+                                if ( ! me.other_hash[top_id].children ) {
+                                    me.other_hash[top_id].scheduled_children = [];
+                                    me.other_hash[top_id].children = [];
+                                }
+                                if ( me.other_hash[top_id].children.indexOf(bottom_id) ==-1 ) {
+                                    me.other_hash[top_id].children.push( bottom_id );
+                                    if ( ( data[i].get('Iteration') ) || ( data[i].get('Release') ) ) {
+                                        me.other_hash[top_id].scheduled_children.push( bottom_id );
+                                    }
+                                }
+                            } else {
+                                me.log( "not in the other hash: " + top_id );
+                                me.other_hash[top_id] = {
+                                    scheduled_children: [],
+                                    children: [bottom_id]
+                                };
+                                if ( ( data[i].get('Iteration') ) || ( data[i].get('Release') ) ) {
+                                    me.other_hash[top_id].scheduled_children.push( bottom_id );
+                                }
+                            }
+                        }
+                    }
+                    start_index = start_index + gap;
+                    if ( start_index < very_long_array.length ) {
+                        me._doNestedLeavesArray( type, rows, very_long_array, start_index );
+                    } else {
+                        me._getOtherData(type,rows);
+                    }
+                }
+            }
+        });
+    },    
     /**
      * having trouble when we have more than 300 items to look for at once
      */
@@ -184,7 +281,11 @@ Ext.define('CustomApp', {
                     var data_length = data.length;
                     me.log( "load other snapshot" );
                     for ( var i=0;i<data_length;i++ ) {
-                        me.other_hash[ data[i].get('ObjectID') ] = data[i].data;
+                        if ( ! me.other_hash[data[i].get('ObjectID')] ) {
+                            me.other_hash[ data[i].get('ObjectID') ] = data[i].data;
+                        } else {
+                            me.other_hash[ data[i].get('ObjectID')] = Ext.Object.merge(me.other_hash[ data[i].get('ObjectID')], data[i].data );
+                        }
                     }
                     start_index = start_index + gap;
                     if ( start_index < other_id_array.length ) {
@@ -222,11 +323,26 @@ Ext.define('CustomApp', {
                 item.release_date = this.timebox_hash[item.release].EndDate;
             }
             
+            if ( ( this.our_hash[ item.object_id ] ) && ( this.our_hash[item.object_id].children )) {
+                this.log( this.our_hash[item.object_id] );
+                var total_kids = this.our_hash[item.object_id].children.length;
+                var scheduled_kids = this.our_hash[item.object_id].scheduled_children.length;
+                item.epic = true;
+                item.epic_report = scheduled_kids + " of " + total_kids;
+            }
+            
             if ((item.other_id) && (this.other_hash[item.other_id])) {
                 var other = this.other_hash[item.other_id];
                 item.other_name = other.Name;
                 item.other_schedule_state = other.ScheduleState;
             
+                if ( other.children ) {
+                    var total_kids = other.children.length;
+	                var scheduled_kids = other.scheduled_children.length;
+	                item.other_epic = true;
+	                item.other_epic_report = scheduled_kids + " of " + total_kids;
+                }
+                
 	            if (( other.Iteration ) && ( this.timebox_hash[other.Iteration] )) {
 	                item.other_iteration_date = this.timebox_hash[other.Iteration].EndDate;
 	            }
@@ -243,11 +359,13 @@ Ext.define('CustomApp', {
         var cols = [
                 { id: 'direction', label: 'Your Team...', type: 'string' },
                 { id: 'project', label: 'Team', type: 'string' },
+                { id: 'epic_report', label: 'Epic', type: 'string' },
                 { id: 'name', label: 'Our Story', type: 'string' },
                 { id: 'schedule_state', label: 'State', type: 'string' },
                 { id: 'release_date', label: 'Release Date', type: 'date' },
                 { id: 'iteration_date', label: 'Iteration Date', type: 'date' },
                 { id: 'other_project', label: 'Other Team', type: 'string' },
+                { id: 'other_epic_report', label: 'Epic', type: 'string' },
                 { id: 'other_name', label: 'Their Story', type: 'string' },
                 { id: 'other_schedule_state', label: 'State', type: 'string' },
                 { id: 'other_release_date', label: 'Release Date', type: 'date' },
