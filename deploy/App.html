@@ -499,15 +499,35 @@
             		            if (( other.Release ) && ( this.timebox_hash[other.Release] )) {
             		                item.other_release_date = this.timebox_hash[other.Release].EndDate;
             		            }
-                                
                                 item = me._setOtherEpicData(item,other);
-            	                
-            	                
+            	                item = me._setLateColors(item);
                                 filtered_rows.push(item);
                             } 
                         }
                     }
                     this._makeTable( type, filtered_rows );
+                },
+                _setLateColors: function(item) {
+                    item.iteration_out_of_sync = false;
+                    item.release_out_of_sync = false;
+                    if ( item.direction === "Provides" ) {
+                        // item should be earlier than other
+                        if ( item.iteration_date && item.other_iteration_date && item.iteration_date > item.other_iteration_date ) {
+                            item.iteration_out_of_sync = true;
+                        }
+                        if ( item.release_date && item.other_release_date && item.release_date > item.other_release_date ) {
+                            item.release_out_of_sync = true;
+                        }
+                    } else {
+                        // item should be after other
+                        if ( item.iteration_date && item.other_iteration_date && item.iteration_date < item.other_iteration_date ) {
+                            item.iteration_out_of_sync = true;
+                        }
+                        if ( item.release_date && item.other_release_date && item.release_date < item.other_release_date ) {
+                            item.release_out_of_sync = true;
+                        }
+                    }
+                    return item;
                 },
                 _makeTable:function( type, rows ) {
                     var me = this;
@@ -537,7 +557,20 @@
                     for ( var i=0; i<number_of_rows; i++ ) {
                         var table_row = [];
                         Ext.Array.each( cols, function(column) {
-                            table_row.push( rows[i][column.id] );
+                            // iteration_out_of_sync
+                            var style = {};
+                            
+                            if ( /Date/.test(column.label) ) {
+                                if (! rows[i][column.id] ) {
+                                    style = { style: 'border: 3px solid yellow' };
+                                } else if (/Iteration/.test(column.label) && rows[i].iteration_out_of_sync ){
+                                    style = { style: 'background-color: #FFCCCC' };
+                                } else if (/Release/.test(column.label) && rows[i].release_out_of_sync ){
+                                    style = { style: 'background-color: #FFCCCC' };
+                                }
+                            }
+                            table_row.push( { v: rows[i][column.id], p: style } );
+            
                         });
                         data_table.addRow(table_row);
                     }
