@@ -106,7 +106,8 @@ Ext.define('CustomApp', {
     	Ext.create('Rally.data.lookback.SnapshotStore',{
     		autoLoad: true,
     		limit: 1000,
-    		fetch: ['Name','_ItemHierarchy',type, 'ScheduleState', 'Project', 'Iteration', 'Release', '_UnformattedID' ],
+    		fetch: ['Name','_ItemHierarchy',type, 'ScheduleState', 'Project', 'Iteration', 'Release', 
+                '_UnformattedID', 'Blocked' ],
             hydrate: [ 'ScheduleState' ],
     		filters: [ {
 	        	  property: '__At',
@@ -149,6 +150,7 @@ Ext.define('CustomApp', {
 			        rows.push({
 	                    epic: false,
 	                    epic_report: "",
+                        blocked: data[i].get('Blocked'),
 	                    object_id: data[i].get('ObjectID'),
 			            direction: direction,
 			            project: data[i].get('Project'),
@@ -162,6 +164,7 @@ Ext.define('CustomApp', {
 	                    other_id: dependent_ids[j],
 			            other_project: 'tbd',
 			            other_name: 'tbd',
+                        other_blocked: false,
 	                    other_epic: false,
 	                    other_epic_report: "",
 			            other_schedule_state: 'tbd',
@@ -280,7 +283,8 @@ Ext.define('CustomApp', {
         Ext.create('Rally.data.lookback.SnapshotStore',{
             autoLoad: true,
             limit: gap,
-            fetch: ['Name','_ItemHierarchy', 'ScheduleState', 'Project', 'Iteration', 'Release', '_UnformattedID' ],
+            fetch: ['Name','_ItemHierarchy', 'ScheduleState', 'Project', 'Iteration', 'Release', 
+                '_UnformattedID', 'Blocked' ],
             hydrate: [ 'ScheduleState' ],
             filters: query,
             listeners: {
@@ -463,7 +467,8 @@ Ext.define('CustomApp', {
                         
             if ((item.other_id) && (this.other_hash[item.other_id])) {
                 var other = this.other_hash[item.other_id];
-                item.other_name = "US" + other._UnformattedID + other.Name;
+                item.other_name = "US" + other._UnformattedID + ": " + other.Name;
+                item.other_blocked = other.Blocked;
                 item.other_schedule_state = other.ScheduleState;
                 var in_open_project = true;
                 if ( other.Project ) {
@@ -550,6 +555,14 @@ Ext.define('CustomApp', {
             Ext.Array.each( cols, function(column) {
                 // iteration_out_of_sync
                 var style = {};
+                
+                if ( /^schedule_state/.test(column.id) && rows[i].blocked ) {
+                    style = { style: 'background-color: #FFCCCC' };
+                }
+                
+                if ( /other_schedule_state/.test(column.id) && rows[i].other_blocked ) {
+                    style = { style: 'background-color: #FFCCCC' };
+                }
                 
                 if ( /Date/.test(column.label) ) {
                     if (! rows[i][column.id] ) {

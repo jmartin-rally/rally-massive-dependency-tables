@@ -1,12 +1,15 @@
-<!DOCTYPE html>
+  <!DOCTYPE html>
 <html>
 <head>
     <title>Dependency Report</title>
 
     <script type="text/javascript" src="/apps/2.0p5/sdk.js"></script>
 
+    <script type="text/javascript" src="https://www.google.com/jsapi"></script>
+
     <script type="text/javascript">
-        Rally.onReady(function() {
+		google.load('visualization', '1', {packages:['table']});
+    	google.setOnLoadCallback(function() {
             Ext.define('CustomApp', {
                 extend: 'Rally.app.App',
                 componentCls: 'app',
@@ -115,7 +118,8 @@
                 	Ext.create('Rally.data.lookback.SnapshotStore',{
                 		autoLoad: true,
                 		limit: 1000,
-                		fetch: ['Name','_ItemHierarchy',type, 'ScheduleState', 'Project', 'Iteration', 'Release', '_UnformattedID' ],
+                		fetch: ['Name','_ItemHierarchy',type, 'ScheduleState', 'Project', 'Iteration', 'Release', 
+                            '_UnformattedID', 'Blocked' ],
                         hydrate: [ 'ScheduleState' ],
                 		filters: [ {
             	        	  property: '__At',
@@ -158,6 +162,7 @@
             			        rows.push({
             	                    epic: false,
             	                    epic_report: "",
+                                    blocked: data[i].get('Blocked'),
             	                    object_id: data[i].get('ObjectID'),
             			            direction: direction,
             			            project: data[i].get('Project'),
@@ -171,6 +176,7 @@
             	                    other_id: dependent_ids[j],
             			            other_project: 'tbd',
             			            other_name: 'tbd',
+                                    other_blocked: false,
             	                    other_epic: false,
             	                    other_epic_report: "",
             			            other_schedule_state: 'tbd',
@@ -289,7 +295,8 @@
                     Ext.create('Rally.data.lookback.SnapshotStore',{
                         autoLoad: true,
                         limit: gap,
-                        fetch: ['Name','_ItemHierarchy', 'ScheduleState', 'Project', 'Iteration', 'Release', '_UnformattedID' ],
+                        fetch: ['Name','_ItemHierarchy', 'ScheduleState', 'Project', 'Iteration', 'Release', 
+                            '_UnformattedID', 'Blocked' ],
                         hydrate: [ 'ScheduleState' ],
                         filters: query,
                         listeners: {
@@ -472,7 +479,8 @@
                                     
                         if ((item.other_id) && (this.other_hash[item.other_id])) {
                             var other = this.other_hash[item.other_id];
-                            item.other_name = "US" + other._UnformattedID + other.Name;
+                            item.other_name = "US: " + other._UnformattedID + other.Name;
+                            item.other_blocked = other.Blocked;
                             item.other_schedule_state = other.ScheduleState;
                             var in_open_project = true;
                             if ( other.Project ) {
@@ -559,6 +567,14 @@
                         Ext.Array.each( cols, function(column) {
                             // iteration_out_of_sync
                             var style = {};
+                            
+                            if ( /^schedule_state/.test(column.id) && rows[i].blocked ) {
+                                style = { style: 'background-color: #FFCCCC' };
+                            }
+                            
+                            if ( /other_schedule_state/.test(column.id) && rows[i].other_blocked ) {
+                                style = { style: 'background-color: #FFCCCC' };
+                            }
                             
                             if ( /Date/.test(column.label) ) {
                                 if (! rows[i][column.id] ) {
