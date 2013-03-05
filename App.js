@@ -405,9 +405,9 @@ Ext.define('CustomApp', {
             var total_kids = this.our_hash[item.object_id].children.length;
             var scheduled_kids = this.our_hash[item.object_id].scheduled_children.length;
             item.epic = true;
-            item.epic_report = scheduled_kids + " of " + total_kids;
-//                                                    me.our_hash[top_id].children_releases = [];
-//                                    me.our_hash[top_id].children_iterations = [];
+            var ratio = Math.round( scheduled_kids * 100 / total_kids ) + "%";
+            item.epic_report = "(" + scheduled_kids + " of " + total_kids + ") scheduled <br/>" + ratio;
+                        
             var releases = this.our_hash[item.object_id].children_releases;
             Ext.Array.each( releases, function( release ) {
                 if (( me.timebox_hash[release] ) && ( me.timebox_hash[release].EndDate > item.release_date )) {
@@ -486,7 +486,8 @@ Ext.define('CustomApp', {
 	                    var total_kids = other.children.length;
 		                var scheduled_kids = other.scheduled_children.length;
 		                item.other_epic = true;
-		                item.other_epic_report = scheduled_kids + " of " + total_kids;
+                        var ratio = Math.round( scheduled_kids * 100 / total_kids ) + "%";
+		                item.other_epic_report = "(" + scheduled_kids + " of " + total_kids + ") scheduled <br/>" + ratio;
 	                }
 	                
 		            if (( other.Iteration ) && ( this.timebox_hash[other.Iteration] )) {
