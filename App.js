@@ -2,7 +2,14 @@ Ext.define('CustomApp', {
     extend: 'Rally.app.App',
     componentCls: 'app',
     items: [
-            { xtype: 'container', itemId: 'selector_box', padding: 15, defaults: { padding: 15 }, html: "--selectors to be supplied--" },
+            { xtype: 'container', itemId: 'selector_box', padding: 15, layout: { type:'hbox' }, defaults: { padding: 15 }, 
+                items: [ 
+                    { xtype: 'container', itemId: 'hide_accepted_box'}, 
+                    { xtype: 'container', itemId: 'hide_epic_box'}, 
+                    { xtype: 'container', itemId: 'tab_box' },
+                    { xtype: 'container', itemId: 'show_group_box' }
+                ]
+            },
             { xtype: 'container', itemId: 'table_box', defaults: { padding: 5 } }
         ],
     our_hash: {}, /* key is object id, content is the story from our project associated with that object id */
@@ -10,8 +17,8 @@ Ext.define('CustomApp', {
     timebox_hash: {}, /* key is object id of iteration or release. Changed both to have EndDate */
     project_hash: {}, /* key is object id of projecs */
     launch: function() {
-        var me = this;
-        me._getBaseData();
+        this._addSelectors();
+        this._getBaseData();
     	//me._getDependencies();
     },
     log: function( msg ) {
@@ -22,11 +29,41 @@ Ext.define('CustomApp', {
     		window.console && console.log( new Date(), msg );
 //    	}
     },
+    _addSelectors: function() {
+        this._addShowBySchedule();
+    },
+    _addShowBySchedule: function() {
+        this.selected_schedule = "All";
+        this.down('#show_group_box').add({
+            xtype: 'radiogroup',
+            fieldLabel: 'Show',
+            width: 300,
+            columns: 3,
+            vertical: false,
+            labelAlign: "right",
+            items: [
+	            { boxLabel: 'All', name: 'show_sched', inputValue: 'All', checked: true },
+	            { boxLabel: 'Unscheduled', name:'show_sched', inputValue: 'Unscheduled', width: 100 },
+	            { boxLabel: 'Late', name: 'show_sched', inputValue: 'Late' }
+            ],
+            listeners: {
+                change: function( radiogroup, newValue ) {
+                    this.log( newValue );
+                    this.selected_schedule = newValue.show_sched;
+                    this._redrawTables();
+                },
+                scope: this
+            }
+        });
+    },
     /**
      * We can't send a very long query, so we'll get our timeboxes and other stories first.  
      * 
      */
     _getBaseData: function() {
+        this.tables = {};  /* google display table */
+        this.data_tables = {}; /* google data store */
+        this.data_views = {}; /* google data view */
         this._getProjects();
     },
     _getDependencies: function() {
@@ -406,7 +443,7 @@ Ext.define('CustomApp', {
             var scheduled_kids = this.our_hash[item.object_id].scheduled_children.length;
             item.epic = true;
             var ratio = Math.round( scheduled_kids * 100 / total_kids ) + "%";
-            item.epic_report = "(" + scheduled_kids + " of " + total_kids + ") scheduled <br/>" + ratio;
+            item.epic_report = "(" + scheduled_kids + " of " + total_kids + ") scheduled " + ratio;
                         
             var releases = this.our_hash[item.object_id].children_releases;
             Ext.Array.each( releases, function( release ) {
@@ -487,7 +524,7 @@ Ext.define('CustomApp', {
 		                var scheduled_kids = other.scheduled_children.length;
 		                item.other_epic = true;
                         var ratio = Math.round( scheduled_kids * 100 / total_kids ) + "%";
-		                item.other_epic_report = "(" + scheduled_kids + " of " + total_kids + ") scheduled <br/>" + ratio;
+		                item.other_epic_report = "(" + scheduled_kids + " of " + total_kids + ") scheduled " + ratio;
 	                }
 	                
 		            if (( other.Iteration ) && ( this.timebox_hash[other.Iteration] )) {
@@ -529,7 +566,7 @@ Ext.define('CustomApp', {
     _makeTable:function( type, rows ) {
         var me = this;
         me.log( "_makeTable: " + type);
-        var cols = [
+        this.columns = [
                 { id: 'direction', label: 'Your Team...', type: 'string' },
                 { id: 'project', label: 'Team', type: 'string' },
                 { id: 'epic_report', label: 'Epic', type: 'string' },
@@ -546,32 +583,32 @@ Ext.define('CustomApp', {
                 { id: 'tags', label: 'Tags', type: 'string' }
             ];
         var data_table = new google.visualization.DataTable({
-            cols: cols
+            cols: me.columns
         });
         // google table is scary because row is pushed as an array of column values
         // that have to be matched to the cols array above (would be nice to have key indexing)
         var number_of_rows = rows.length;
         for ( var i=0; i<number_of_rows; i++ ) {
             var table_row = [];
-            Ext.Array.each( cols, function(column) {
+            Ext.Array.each( me.columns, function(column) {
                 // iteration_out_of_sync
                 var style = {};
                 
                 if ( /^schedule_state/.test(column.id) && rows[i].blocked ) {
-                    style = { style: 'background-color: #FFCCCC' };
+                    style = { style: 'background-color: #FFCCCC', blocked: true };
                 }
                 
                 if ( /other_schedule_state/.test(column.id) && rows[i].other_blocked ) {
-                    style = { style: 'background-color: #FFCCCC' };
+                    style = { style: 'background-color: #FFCCCC', blocked: true };
                 }
                 
                 if ( /Date/.test(column.label) ) {
                     if (! rows[i][column.id] ) {
-                        style = { style: 'border: 3px solid yellow' };
+                        style = { style: 'border: 3px solid yellow', unscheduled: true };
                     } else if (/Iteration/.test(column.label) && rows[i].iteration_out_of_sync ){
-                        style = { style: 'background-color: #FFCCCC' };
+                        style = { style: 'background-color: #FFCCCC', late: true };
                     } else if (/Release/.test(column.label) && rows[i].release_out_of_sync ){
-                        style = { style: 'background-color: #FFCCCC' };
+                        style = { style: 'background-color: #FFCCCC',late: true };
                     }
                 }
                 table_row.push( { v: rows[i][column.id], p: style } );
@@ -579,8 +616,11 @@ Ext.define('CustomApp', {
             });
             data_table.addRow(table_row);
         }
+        this.data_tables[type] = data_table;
         
         var view = new google.visualization.DataView(data_table);
+        this.data_views[type] = view;
+        
         var outer_box_id = type + '_box';
         
         if ( me.down('#' + outer_box_id ) ) { me.down('#'+outer_box_id).destroy(); }
@@ -591,8 +631,65 @@ Ext.define('CustomApp', {
         }
         me.down('#table_box').add( { xtype: 'container', itemId: outer_box_id, id: outer_box_id } );
         
-        var table = new google.visualization.Table( document.getElementById(outer_box_id) );
-        table.draw( view, { showRowNumber: false, allowHtml: true } );
+        this.tables[type] = new google.visualization.Table( document.getElementById(outer_box_id) );
+        this.tables[type].draw( view, { showRowNumber: false, allowHtml: true } );
+    },
+    /**
+     * 
+     * @param {} which_one The type of the table. Valid values are "Predecessors", "Successors", "Both"
+     * 
+     */
+    _redrawTables: function() {
+        this.log( "_redrawTables" );
+        var me = this;
+        // reset to base data
+        for ( var type in me.data_views ) {
+            if ( me.data_views.hasOwnProperty(type) ) {
+                me.data_views[type].setRows(me.data_tables[type].getFilteredRows([{ column: 0, minValue: '' }]));
+            }
+        }
+        
+        // to filter items that we already got
+        if ( me.selected_schedule === "Unscheduled" ) {
+            for ( var type in me.data_views ) {
+                if ( me.data_views.hasOwnProperty(type) ) {
+                    var filtered_rows = [];
+                    var row_indices = me.data_views[type].getFilteredRows([{ column: 0, minValue: '' }]);
+                    Ext.Array.each( row_indices, function(row_index) {
+                        Ext.Array.each(me.columns,function(column,col_index){
+                            if ( me.data_views[type].getProperty(row_index,col_index, "unscheduled")){
+                                filtered_rows.push(row_index);
+                                return false;
+                            }
+                        });
+                    });
+                    me.data_views[type].setRows(filtered_rows);
+                }
+            }
+        } else if ( me.selected_schedule === "Late" ) {
+            for ( var type in me.data_views ) {
+                if ( me.data_views.hasOwnProperty(type) ) {
+                    var filtered_rows = [];
+                    var row_indices = me.data_views[type].getFilteredRows([{ column: 0, minValue: '' }]);
+                    Ext.Array.each( row_indices, function(row_index) {
+                        Ext.Array.each(me.columns,function(column,col_index){
+                            if ( me.data_views[type].getProperty(row_index,col_index, "late")){
+                                filtered_rows.push(row_index);
+                                return false;
+                            }
+                        });
+                    });
+                    me.data_views[type].setRows(filtered_rows);
+                }
+            }
+        }
+        
+        for ( var type in me.tables ) {
+            if ( me.tables.hasOwnProperty(type) ) {
+                me.tables[type].draw(me.data_views[type], { showRowNumber: false, allowHtml: true });
+            }
+        }
+        
     },
     _setAssociatedArraysToEmpty: function(item) {
         item.children_releases = [];
