@@ -1,3 +1,7 @@
 .app {
      /* Add app styles here */
 }
+
+.app_header {
+    font-size: 17px;
+}

@@ -11,10 +11,10 @@ Ext.define('CustomApp', {
                 ]
             },
             { xtype: 'container', defaults: { padding: 5 }, items: [
-	            { xtype: 'container', html: '<h1>Your team receiving stories from other teams</h1>' },
-	            { xtype: 'container', itemId: 'Predecessors_box' },
-                { xtype: 'container', html: '<h1>Your team delivering stories to other teams</h1>' },
+                { xtype: 'container', html: 'Your team delivering stories to other teams', cls: "app_header" },
                 { xtype: 'container',  itemId: 'Successors_box'  }
+                { xtype: 'container', html: 'Your team receiving stories from other teams', cls: "app_header" },
+                { xtype: 'container', itemId: 'Predecessors_box' }
             ]}
         ],
     our_hash: {}, /* key is object id, content is the story from our project associated with that object id */
@@ -24,15 +24,15 @@ Ext.define('CustomApp', {
     launch: function() {
         this._addSelectors();
         this._getBaseData();
-    	//me._getDependencies();
+        //me._getDependencies();
     },
     log: function( msg ) {
-    	var me = this;
-//    	if ( ( typeof(msg) == "object" ) && ( msg.length ) ) {
-//    		Ext.Array.each( msg, function( one_msg ) { me.log( one_msg ); } );
-//    	} else {
-    		window.console && console.log( new Date(), msg );
-//    	}
+        var me = this;
+//        if ( ( typeof(msg) == "object" ) && ( msg.length ) ) {
+//            Ext.Array.each( msg, function( one_msg ) { me.log( one_msg ); } );
+//        } else {
+            window.console && console.log( new Date(), msg );
+//        }
     },
     _addSelectors: function() {
         this._addShowBySchedule();
@@ -65,7 +65,6 @@ Ext.define('CustomApp', {
             checked: true,
             listeners: {
                 change: function( cb, newValue ) {
-                    this.log( newValue);
                     this.hide_epic_column = newValue;
                     this._redrawTables();
                 },
@@ -83,9 +82,9 @@ Ext.define('CustomApp', {
             vertical: false,
             labelAlign: "right",
             items: [
-	            { boxLabel: 'All', name: 'show_sched', inputValue: 'All', checked: true },
-	            { boxLabel: 'Unscheduled', name:'show_sched', inputValue: 'Unscheduled', width: 100 },
-	            { boxLabel: 'Late', name: 'show_sched', inputValue: 'Late' }
+                { boxLabel: 'All', name: 'show_sched', inputValue: 'All', checked: true },
+                { boxLabel: 'Unscheduled', name:'show_sched', inputValue: 'Unscheduled', width: 100 },
+                { boxLabel: 'Late', name: 'show_sched', inputValue: 'Late' }
             ],
             listeners: {
                 change: function( radiogroup, newValue ) {
@@ -103,12 +102,14 @@ Ext.define('CustomApp', {
         this._getProjects();
     },
     _getDependencies: function() {
+        this.showMask("Loading dependencies...");
         this._getOurItems("Successors");
         this._getOurItems("Predecessors");
     },
     _getProjects: function() {
         var me = this;
-        me.log( "_getProjects");
+        this.log("_getProjects");
+        this.showMask("Loading project names...");
         Ext.create('Rally.data.WsapiDataStore',{
             context: {project: null},
             autoLoad: true,
@@ -130,7 +131,8 @@ Ext.define('CustomApp', {
     },
     _getTimeboxes: function() {
         var me = this;
-        me.log( "_getTimeboxes" );
+        this.log("_getTimeboxes");
+        this.showMask("Loading timeboxes...");
         Ext.create('Rally.data.WsapiDataStore',{
             context: {project: null},
             autoLoad: true,
@@ -174,7 +176,7 @@ Ext.define('CustomApp', {
         });
     },
     _getOurItems: function( type ) {
-    	var me  = this;
+        var me  = this;
 
         var filters =  [ 
             {
@@ -203,6 +205,7 @@ Ext.define('CustomApp', {
                 '_UnformattedID', 'Blocked' ],
             hydrate: [ 'ScheduleState' ],
             filters: filters,
+            order: { property: 'ObjectID' },
             listeners: {
                 load: function( store, data, success ) {
                     me._createRowPerDependency( type, data );
@@ -213,6 +216,7 @@ Ext.define('CustomApp', {
     _createRowPerDependency: function( type, data ) {
         var me = this;
         me.log( [ "_createRowPerDependency " + type, data.length ] );
+        this.showMask("Creating Tables...");
         var number_of_items_with_dependencies = data.length;
         var rows = [];
         
@@ -225,38 +229,37 @@ Ext.define('CustomApp', {
             var dependent_ids = data[i].get(type);
             me.our_hash[ data[i].get('ObjectID') ] = data[i].data;
             if ( me.project_hash.hasOwnProperty(data[i].get('Project')) ) {
-	            for ( var j=0; j< dependent_ids.length; j++ ) {
-			        rows.push({
-	                    epic: false,
-	                    epic_report: "",
+                for ( var j=0; j< dependent_ids.length; j++ ) {
+                    rows.push({
+                        epic: false,
+                        epic_report: "",
                         blocked: data[i].get('Blocked'),
-	                    object_id: data[i].get('ObjectID'),
-			            direction: direction,
-			            project: data[i].get('Project'),
-			            name: "US" + data[i].get('_UnformattedID') + ": " + data[i].get('Name') ,
-			            schedule_state: data[i].get('ScheduleState'),
-			            release: data[i].get('Release'),
-			            iteration: data[i].get('Iteration'),
-	                    iteration_name: "",
-			            release_date: null,
-			            iteration_date: null,
-	                    other_id: dependent_ids[j],
-			            other_project: 'tbd',
-			            other_name: 'tbd',
+                        object_id: data[i].get('ObjectID'),
+                        direction: direction,
+                        project: data[i].get('Project'),
+                        name: "US" + data[i].get('_UnformattedID') + ": " + data[i].get('Name') ,
+                        schedule_state: data[i].get('ScheduleState'),
+                        release: data[i].get('Release'),
+                        iteration: data[i].get('Iteration'),
+                        iteration_name: "",
+                        release_date: null,
+                        iteration_date: null,
+                        other_id: dependent_ids[j],
+                        other_project: 'tbd',
+                        other_name: 'tbd',
                         other_blocked: false,
-	                    other_epic: false,
-	                    other_epic_report: "",
-			            other_schedule_state: 'tbd',
-			            other_release: null,
-			            other_iteration: null,
-			            other_release_date: null,
-			            other_iteration_date: null,
-			            tags: ''
-			        });
+                        other_epic: false,
+                        other_epic_report: "",
+                        other_schedule_state: 'tbd',
+                        other_release: null,
+                        other_iteration: null,
+                        other_release_date: null,
+                        other_iteration_date: null,
+                        tags: ''
+                    });
                 }
             }
         }
-        me.log( ["rows",rows, "our_hash", me.our_hash ] );
         me._getOurLeaves( type,rows );
     },
 /**
@@ -413,8 +416,8 @@ Ext.define('CustomApp', {
         });
     },
     /**
-	 * having trouble when we have more than 300 items to look for at once
-	 */
+     * having trouble when we have more than 300 items to look for at once
+     */
     _getOtherLeaves: function(type,rows) {
         var me = this;
         me.log("_getLeaves: " + type);     
@@ -503,10 +506,8 @@ Ext.define('CustomApp', {
         return item;
     },
     _setOtherEpicData: function(item, other) {
-        //this.log( other.ObjectID );
-        if ( other.ObjectID  == "7463910659" ) {
-            this.log( [ "_setOtherEpicData", item, other ]);
-        }
+        this.log( "_setOtherEpicData" );
+
         var me = this;
         var releases = other.children_releases;
         Ext.Array.each( releases, function(release) {
@@ -525,7 +526,6 @@ Ext.define('CustomApp', {
     _populateRowData: function( type, rows ) {
         var me = this;
         this.log( "_populateRowData: " + type );
-        this.log( [ "other_hash", this.other_hash ]);
         var filtered_rows = [];
         var item_length = rows.length;
         for ( var i=0; i<item_length; i++ ) {
@@ -561,22 +561,22 @@ Ext.define('CustomApp', {
                 }
                 
                 if ( in_open_project ) {
-	                if ( other.children ) {
-	                    var total_kids = other.children.length;
-		                var scheduled_kids = other.scheduled_children.length;
-		                item.other_epic = true;
+                    if ( other.children ) {
+                        var total_kids = other.children.length;
+                        var scheduled_kids = other.scheduled_children.length;
+                        item.other_epic = true;
                         var ratio = Math.round( scheduled_kids * 100 / total_kids ) + "%";
-		                item.other_epic_report = "(" + scheduled_kids + " of " + total_kids + ") scheduled " + ratio;
-	                }
-	                
-		            if (( other.Iteration ) && ( this.timebox_hash[other.Iteration] )) {
-		                item.other_iteration_date = this.timebox_hash[other.Iteration].EndDate;
-		            }
-		            if (( other.Release ) && ( this.timebox_hash[other.Release] )) {
-		                item.other_release_date = this.timebox_hash[other.Release].EndDate;
-		            }
+                        item.other_epic_report = "(" + scheduled_kids + " of " + total_kids + ") scheduled " + ratio;
+                    }
+                    
+                    if (( other.Iteration ) && ( this.timebox_hash[other.Iteration] )) {
+                        item.other_iteration_date = this.timebox_hash[other.Iteration].EndDate;
+                    }
+                    if (( other.Release ) && ( this.timebox_hash[other.Release] )) {
+                        item.other_release_date = this.timebox_hash[other.Release].EndDate;
+                    }
                     item = me._setOtherEpicData(item,other);
-	                item = me._setLateColors(item);
+                    item = me._setLateColors(item);
                     filtered_rows.push(item);
                 } 
             }
@@ -733,12 +733,11 @@ Ext.define('CustomApp', {
             var columns_to_hide = [];
             Ext.Array.each(me.columns,function(column,col_index) {
                 if ( /Epic/.test( column.label) ) {
-                    me.log('hide ' + col_index);
                     columns_to_hide.push(col_index);
                 }
             });
-	        for ( var type in me.tables ) {
-	            if ( me.tables.hasOwnProperty(type) ) {
+            for ( var type in me.tables ) {
+                if ( me.tables.hasOwnProperty(type) ) {
                     me.data_views[type].hideColumns(columns_to_hide);
                 }
             }
@@ -750,6 +749,7 @@ Ext.define('CustomApp', {
             }
         }
     
+        this.hideMask();
     },
     _setAssociatedArraysToEmpty: function(item) {
         item.children_releases = [];
@@ -757,5 +757,14 @@ Ext.define('CustomApp', {
         item.scheduled_children = [];
         item.children = [];
         return item;
+    },
+    showMask: function(msg) {
+        if ( this.getEl() ) { 
+            this.getEl().unmask();
+            this.getEl().mask(msg);
+        }
+    },
+    hideMask: function() {
+        this.getEl().unmask();
     }
 });
