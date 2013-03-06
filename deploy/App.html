@@ -319,7 +319,7 @@
                                     object_id: data[i].get('ObjectID'),
                                     direction: direction,
                                     project: data[i].get('Project'),
-                                    name: "US" + data[i].get('_UnformattedID') + ": " + data[i].get('Name') ,
+                                    name: me._getLinkedName(data[i].getData()),
                                     schedule_state: data[i].get('ScheduleState'),
                                     release: data[i].get('Release'),
                                     iteration: data[i].get('Iteration'),
@@ -850,6 +850,18 @@
                 },
                 hideMask: function() {
                     this.getEl().unmask();
+                },
+                _getLinkedName: function(item) {
+                    this.log( item );
+                    if ( ! item._ref ) {
+                        item._ref = "/hierarchicalrequirement/" + item.ObjectID;
+                    }
+                    if ( ! item.FormattedID ) {
+                        item.FormattedID = "US" + item._UnformattedID; /* TODO: change this for other customers */
+                    }
+                    var url = Rally.util.Navigation.createRallyDetailUrl(item);
+                    var formatted_string = "<a target='_top' href='" + url + "'>" + item.FormattedID + "</a>: " + item.Name;
+                    return formatted_string;
                 }
             });
 

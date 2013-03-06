@@ -12,33 +12,33 @@ in debug:
     <script type="text/javascript" src="https://www.google.com/jsapi"></script>
 
     <script type="text/javascript">
-		google.load('visualization', '1', {packages:['table']});
-    	google.setOnLoadCallback(function() {
+        google.load('visualization', '1', {packages:['table']});
+        google.setOnLoadCallback(function() {
             Rally.loadScripts([
                 "App.js"
             ], function() {
                 Rally.launchApp('CustomApp', {
                     name: 'Dependency Report'
-            	});
+                });
             }, true);
         });
     </script>
     
     in the deploy one (after a new build), change the top to:
     
-    <!DOCTYPE html>
-		<html>
-		<head>
-		    <title>Dependency Report</title>
-		
-		    <script type="text/javascript" src="/apps/2.0p5/sdk.js"></script>
-		
-		    <script type="text/javascript" src="https://www.google.com/jsapi"></script>
-		
-		    <script type="text/javascript">
-				google.load('visualization', '1', {packages:['table']});
-		    	google.setOnLoadCallback(function() {
-		            Ext.define('CustomApp', {
-		                ...
+<!DOCTYPE html>
+    <html>
+    <head>
+        <title>Dependency Report</title>
+    
+        <script type="text/javascript" src="/apps/2.0p5/sdk.js"></script>
+    
+        <script type="text/javascript" src="https://www.google.com/jsapi"></script>
+    
+        <script type="text/javascript">
+            google.load('visualization', '1', {packages:['table']});
+            google.setOnLoadCallback(function() {
+                Ext.define('CustomApp', {
+                        ...
     
     

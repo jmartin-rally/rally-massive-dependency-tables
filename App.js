@@ -307,7 +307,7 @@ Ext.define('CustomApp', {
                         object_id: data[i].get('ObjectID'),
                         direction: direction,
                         project: data[i].get('Project'),
-                        name: "US" + data[i].get('_UnformattedID') + ": " + data[i].get('Name') ,
+                        name: me._getLinkedName(data[i].getData()),
                         schedule_state: data[i].get('ScheduleState'),
                         release: data[i].get('Release'),
                         iteration: data[i].get('Iteration'),
@@ -618,7 +618,7 @@ Ext.define('CustomApp', {
                         
             if ((item.other_id) && (this.other_hash[item.other_id])) {
                 var other = this.other_hash[item.other_id];
-                item.other_name = "US" + other._UnformattedID + ": " + other.Name;
+                item.other_name =  me._getLinkedName(other);
                 item.other_blocked = other.Blocked;
                 item.other_schedule_state = other.ScheduleState;
                 var in_open_project = true;
@@ -838,5 +838,18 @@ Ext.define('CustomApp', {
     },
     hideMask: function() {
         this.getEl().unmask();
+    },
+    _getLinkedName: function(item) {
+        this.log( item );
+        if ( ! item._ref ) {
+            item._ref = "/hierarchicalrequirement/" + item.ObjectID;
+        }
+        if ( ! item.FormattedID ) {
+            item.FormattedID = "US" + item._UnformattedID; /* TODO: change this for other customers */
+        }
+        var url = Rally.util.Navigation.createRallyDetailUrl(item);
+        //var formatted_string = "<a target='_top' href='" + url + "'>" + item.FormattedID + "</a>: " + item.Name;
+        var formatted_string = "<a target='_blank' href='" + url + "'>" + item.FormattedID + "</a>: " + item.Name;
+        return formatted_string;
     }
 });
