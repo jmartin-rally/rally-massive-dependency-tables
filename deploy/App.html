@@ -1,16 +1,13 @@
 <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Dependency Report</title>
-    
-        <script type="text/javascript" src="/apps/2.0p5/sdk.js"></script>
-    
-        <script type="text/javascript" src="https://www.google.com/jsapi"></script>
-    
-        <script type="text/javascript">
-            google.load('visualization', '1', {packages:['table']});
-            google.setOnLoadCallback(function() {
-                Ext.define('CustomApp', {
+<html>
+<head>
+    <title>Dependency Report</title>
+
+    <script type="text/javascript" src="/apps/2.0p5/sdk.js"></script>
+
+    <script type="text/javascript">
+        Rally.onReady(function() {
+            Ext.define('CustomApp', {
                 extend: 'Rally.app.App',
                 componentCls: 'app',
                 items: [
@@ -38,6 +35,7 @@
                 tag_hash: {}, /* key is object id of tags */
                 selected_tags: [],
                 launch: function() {
+                    this.first_run = true;
                     this._addSelectors();
                     this._getBaseData();
                 },
@@ -91,16 +89,33 @@
                     
                 },
                 _addAcceptedCheckbox: function() {
+                    var me = this;
                     this.hide_accepted = true;
                     this.down('#hide_accepted_box').add({
                         xtype: 'checkbox',
+                        stateId: 'pxs.dependency.accepted',
+                        stateful: true,
+                        stateEvents: ['change'],
+                        getState: function() {
+                            me.log( ["saving sate", this.getValue() ]);
+                            return { value: this.getValue() };
+                        },
+                        applyState: function(state) {
+                            me.log(["applying state", state]);
+                            if ( state ) {
+                                this.setValue(state.value);
+                            }
+                        },
                         fieldLabel: 'Hide Accepted?',
                         labelAlign: "right",
                         checked: true,
                         listeners: {
                             change: function(cb,newValue) {
                                 this.hide_accepted = newValue;
-                                this._getDependencies(); /* already have base data at this point */
+                                if ( ! me.first_run ) {
+                                    /* already have base data at this point */
+                                     me._getDependencies(); 
+                                }
                             },
                             scope: this
                         }
@@ -154,6 +169,8 @@
                 },
                 _getDependencies: function() {
                     this.showMask("Loading dependencies...");
+                    // to prevent the checkbox reloading from memory to cause a double load of data
+                    this.first_run = false;
                     this._getOurItems("Successors");
                     this._getOurItems("Predecessors");
                 },
@@ -251,6 +268,7 @@
                 _getOurItems: function( type ) {
                     var me  = this;
             
+                    
                     var filters =  [ 
                         {
                             property: '__At',
@@ -630,7 +648,7 @@
                                     
                         if ((item.other_id) && (this.other_hash[item.other_id])) {
                             var other = this.other_hash[item.other_id];
-                            item.other_name = "US" + other._UnformattedID + ": " + other.Name;
+                            item.other_name =  me._getLinkedName(other);
                             item.other_blocked = other.Blocked;
                             item.other_schedule_state = other.ScheduleState;
                             var in_open_project = true;
@@ -860,7 +878,8 @@
                         item.FormattedID = "US" + item._UnformattedID; /* TODO: change this for other customers */
                     }
                     var url = Rally.util.Navigation.createRallyDetailUrl(item);
-                    var formatted_string = "<a target='_top' href='" + url + "'>" + item.FormattedID + "</a>: " + item.Name;
+                    //var formatted_string = "<a target='_top' href='" + url + "'>" + item.FormattedID + "</a>: " + item.Name;
+                    var formatted_string = "<a target='_blank' href='" + url + "'>" + item.FormattedID + "</a>: " + item.Name;
                     return formatted_string;
                 }
             });

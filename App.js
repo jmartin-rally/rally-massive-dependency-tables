@@ -26,6 +26,7 @@ Ext.define('CustomApp', {
     tag_hash: {}, /* key is object id of tags */
     selected_tags: [],
     launch: function() {
+        this.first_run = true;
         this._addSelectors();
         this._getBaseData();
     },
@@ -79,16 +80,33 @@ Ext.define('CustomApp', {
         
     },
     _addAcceptedCheckbox: function() {
+        var me = this;
         this.hide_accepted = true;
         this.down('#hide_accepted_box').add({
             xtype: 'checkbox',
+            stateId: 'pxs.dependency.accepted',
+            stateful: true,
+            stateEvents: ['change'],
+            getState: function() {
+                me.log( ["saving sate", this.getValue() ]);
+                return { value: this.getValue() };
+            },
+            applyState: function(state) {
+                me.log(["applying state", state]);
+                if ( state ) {
+                    this.setValue(state.value);
+                }
+            },
             fieldLabel: 'Hide Accepted?',
             labelAlign: "right",
             checked: true,
             listeners: {
                 change: function(cb,newValue) {
                     this.hide_accepted = newValue;
-                    this._getDependencies(); /* already have base data at this point */
+                    if ( ! me.first_run ) {
+                        /* already have base data at this point */
+                         me._getDependencies(); 
+                    }
                 },
                 scope: this
             }
@@ -142,6 +160,8 @@ Ext.define('CustomApp', {
     },
     _getDependencies: function() {
         this.showMask("Loading dependencies...");
+        // to prevent the checkbox reloading from memory to cause a double load of data
+        this.first_run = false;
         this._getOurItems("Successors");
         this._getOurItems("Predecessors");
     },
@@ -239,6 +259,7 @@ Ext.define('CustomApp', {
     _getOurItems: function( type ) {
         var me  = this;
 
+        
         var filters =  [ 
             {
                 property: '__At',
