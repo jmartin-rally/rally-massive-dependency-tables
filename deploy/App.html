@@ -1,13 +1,16 @@
 <!DOCTYPE html>
-<html>
-<head>
-    <title>Dependency Report</title>
-
-    <script type="text/javascript" src="/apps/2.0p5/sdk.js"></script>
-
-    <script type="text/javascript">
-        Rally.onReady(function() {
-            Ext.define('CustomApp', {
+    <html>
+    <head>
+        <title>Dependency Report</title>
+    
+        <script type="text/javascript" src="/apps/2.0p5/sdk.js"></script>
+    
+        <script type="text/javascript" src="https://www.google.com/jsapi"></script>
+    
+        <script type="text/javascript">
+            google.load('visualization', '1', {packages:['table']});
+            google.setOnLoadCallback(function() {
+                Ext.define('CustomApp', {
                 extend: 'Rally.app.App',
                 componentCls: 'app',
                 items: [
