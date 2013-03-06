@@ -6,7 +6,8 @@ Ext.define('CustomApp', {
                 items: [ 
                     { xtype: 'container', itemId: 'hide_accepted_box'}, 
                     { xtype: 'container', itemId: 'hide_epic_box'}, 
-                    { xtype: 'container', itemId: 'tab_box' },
+                    { xtype: 'container', itemId: 'tag_box' },
+                    { xtype: 'container', itemId: 'tag_exe_box', layout: { type: 'vbox' } },
                     { xtype: 'container', itemId: 'show_group_box' }
                 ]
             },
@@ -19,12 +20,14 @@ Ext.define('CustomApp', {
         ],
     our_hash: {}, /* key is object id, content is the story from our project associated with that object id */
     other_hash: {}, /* key is object id, content is the story associated with that object id */
+    /* THINGS WE CAN'T GET FROM LOOKBACK API: */
     timebox_hash: {}, /* key is object id of iteration or release. Changed both to have EndDate */
     project_hash: {}, /* key is object id of projecs */
+    tag_hash: {}, /* key is object id of tags */
+    selected_tags: [],
     launch: function() {
         this._addSelectors();
         this._getBaseData();
-        //me._getDependencies();
     },
     log: function( msg ) {
         var me = this;
@@ -38,6 +41,42 @@ Ext.define('CustomApp', {
         this._addShowBySchedule();
         this._addAcceptedCheckbox();
         this._addEpicCheckbox();
+        this._addTagPicker();
+    },
+    _addTagPicker: function() {
+        var me = this;
+        this.down('#tag_box').add(Ext.create('Rally.ui.picker.TagPicker',{
+            fieldLabel: "Tag(s):",
+            labelAlign: "right",
+             allowBlank: true,
+            toolTipPreferenceKey: undefined, /* for bug avoidance */
+            listeners: {
+                selectionchange: function( picker, values ) {
+                    this.log( values );
+                    var names = [];
+                    me.selected_tags = [];
+                    Ext.Array.each( values, function(value) { 
+                        me.selected_tags.push(value.ObjectID);
+                        names.push(value.Name); 
+                    } );
+                    this.down('#tag_list_box').update( names.join(", " ));
+                    this.down('#tag_button').setDisabled(false);
+                },
+                scope: this
+            }
+        }));
+        this.down('#tag_exe_box').add( { 
+            xtype: 'rallybutton', 
+            itemId: 'tag_button',
+            text: 'Rerun Query with Tags',
+            disabled: true,
+            handler: function() {
+                this.setDisabled(true);
+                me._getDependencies(); 
+            }
+        });
+        this.down('#tag_exe_box').add( { xtype: 'container', itemId: 'tag_list_box' });
+        
     },
     _addAcceptedCheckbox: function() {
         this.hide_accepted = true;
@@ -124,11 +163,33 @@ Ext.define('CustomApp', {
                     for ( var i=0; i<data_length; i++ ) {
                         me.project_hash[ data[i].get('ObjectID') ] = { Name: data[i].get('Name') };
                     }
-                    me._getTimeboxes();
+                    me._getTags();
                 }
             }
         });
     },
+    _getTags: function() {
+        var me = this;
+        this.log("_getTags");
+        this.showMask("Loading tags...");
+        Ext.create('Rally.data.WsapiDataStore',{
+            context: {project: null},
+            autoLoad: true,
+            model: 'Tag',
+            limit: 5000,
+            fetch: [ 'ObjectID', 'Name' ],
+            filters: { property: "Archived", operator: "=", value: false },
+            listeners: {
+                load: function( store, data, success ) {
+                    var data_length = data.length;
+                    me.log( data_length );
+                    for ( var i=0; i<data_length; i++ ) {
+                        me.tag_hash[ data[i].get('ObjectID') ] = { Name: data[i].get('Name') };
+                    }
+                    me._getTimeboxes();
+                }
+            }
+        });    },
     _getTimeboxes: function() {
         var me = this;
         this.log("_getTimeboxes");
@@ -198,12 +259,15 @@ Ext.define('CustomApp', {
         if ( me.hide_accepted ) {
             filters.push( { property: 'ScheduleState', operator: '!=', value: 'Accepted' } );
         }
+        if ( me.selected_tags.length > 0 ) {
+            filters.push( { property: 'Tags', operator: 'in', value: me.selected_tags } );
+        }
         Ext.create('Rally.data.lookback.SnapshotStore',{
             autoLoad: true,
             limit: 1000,
             fetch: ['Name','_ItemHierarchy',type, 'ScheduleState', 'Project', 'Iteration', 'Release', 
-                '_UnformattedID', 'Blocked' ],
-            hydrate: [ 'ScheduleState' ],
+                '_UnformattedID', 'Blocked', 'Tags' ],
+            hydrate: [ 'ScheduleState','Tags' ],
             filters: filters,
             order: { property: 'ObjectID' },
             listeners: {
@@ -229,6 +293,12 @@ Ext.define('CustomApp', {
             var dependent_ids = data[i].get(type);
             me.our_hash[ data[i].get('ObjectID') ] = data[i].data;
             if ( me.project_hash.hasOwnProperty(data[i].get('Project')) ) {
+                var tags = [];
+                if ( data[i].get('Tags') && data[i].get('Tags').length > 0 ) {
+                    Ext.Array.each( data[i].get('Tags'), function(tag) {
+                        if ( me.tag_hash[tag] ) { tags.push( me.tag_hash[tag].Name ); }
+                    });
+                }
                 for ( var j=0; j< dependent_ids.length; j++ ) {
                     rows.push({
                         epic: false,
@@ -244,6 +314,7 @@ Ext.define('CustomApp', {
                         iteration_name: "",
                         release_date: null,
                         iteration_date: null,
+                        tags: tags.join(' '),
                         other_id: dependent_ids[j],
                         other_project: 'tbd',
                         other_name: 'tbd',
@@ -254,12 +325,13 @@ Ext.define('CustomApp', {
                         other_release: null,
                         other_iteration: null,
                         other_release_date: null,
-                        other_iteration_date: null,
-                        tags: ''
+                        other_iteration_date: null
                     });
                 }
             }
         }
+        me.log( ["Rows:", rows] );
+         me.log( ["Data:", data] );
         me._getOurLeaves( type,rows );
     },
 /**

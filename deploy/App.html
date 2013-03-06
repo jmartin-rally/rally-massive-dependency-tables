@@ -1,53 +1,166 @@
-  <!DOCTYPE html>
-<html>
-<head>
-    <title>Dependency Report</title>
-
-    <script type="text/javascript" src="/apps/2.0p5/sdk.js"></script>
-
-    <script type="text/javascript" src="https://www.google.com/jsapi"></script>
-
-    <script type="text/javascript">
-		google.load('visualization', '1', {packages:['table']});
-    	google.setOnLoadCallback(function() {
-            Ext.define('CustomApp', {
+<!DOCTYPE html>
+    <html>
+    <head>
+        <title>Dependency Report</title>
+    
+        <script type="text/javascript" src="/apps/2.0p5/sdk.js"></script>
+    
+        <script type="text/javascript" src="https://www.google.com/jsapi"></script>
+    
+        <script type="text/javascript">
+            google.load('visualization', '1', {packages:['table']});
+            google.setOnLoadCallback(function() {
+                Ext.define('CustomApp', {
                 extend: 'Rally.app.App',
                 componentCls: 'app',
                 items: [
-                        { xtype: 'container', itemId: 'selector_box', padding: 15, defaults: { padding: 15 }, html: "--selectors to be supplied--" },
-                        { xtype: 'container', itemId: 'table_box', defaults: { padding: 5 } }
+                        { xtype: 'container', itemId: 'selector_box', padding: 15, layout: { type:'hbox' }, defaults: { padding: 15 }, 
+                            items: [ 
+                                { xtype: 'container', itemId: 'hide_accepted_box'}, 
+                                { xtype: 'container', itemId: 'hide_epic_box'}, 
+                                { xtype: 'container', itemId: 'tag_box' },
+                                { xtype: 'container', itemId: 'tag_exe_box', layout: { type: 'vbox' } },
+                                { xtype: 'container', itemId: 'show_group_box' }
+                            ]
+                        },
+                        { xtype: 'container', defaults: { padding: 5 }, items: [
+                            { xtype: 'container', html: 'Your team delivering stories to other teams', cls: "app_header" },
+                            { xtype: 'container',  itemId: 'Successors_box'  },
+                            { xtype: 'container', html: 'Your team receiving stories from other teams', cls: "app_header" },
+                            { xtype: 'container', itemId: 'Predecessors_box' }
+                        ]}
                     ],
                 our_hash: {}, /* key is object id, content is the story from our project associated with that object id */
                 other_hash: {}, /* key is object id, content is the story associated with that object id */
+                /* THINGS WE CAN'T GET FROM LOOKBACK API: */
                 timebox_hash: {}, /* key is object id of iteration or release. Changed both to have EndDate */
                 project_hash: {}, /* key is object id of projecs */
+                tag_hash: {}, /* key is object id of tags */
+                selected_tags: [],
                 launch: function() {
-                    var me = this;
-                    me._getBaseData();
-                	//me._getDependencies();
+                    this._addSelectors();
+                    this._getBaseData();
                 },
                 log: function( msg ) {
-                	var me = this;
-            //    	if ( ( typeof(msg) == "object" ) && ( msg.length ) ) {
-            //    		Ext.Array.each( msg, function( one_msg ) { me.log( one_msg ); } );
-            //    	} else {
-                		window.console && console.log( new Date(), msg );
-            //    	}
+                    var me = this;
+            //        if ( ( typeof(msg) == "object" ) && ( msg.length ) ) {
+            //            Ext.Array.each( msg, function( one_msg ) { me.log( one_msg ); } );
+            //        } else {
+                        window.console && console.log( new Date(), msg );
+            //        }
                 },
-                /**
-                 * We can't send a very long query, so we'll get our timeboxes and other stories first.  
-                 * 
-                 */
+                _addSelectors: function() {
+                    this._addShowBySchedule();
+                    this._addAcceptedCheckbox();
+                    this._addEpicCheckbox();
+                    this._addTagPicker();
+                },
+                _addTagPicker: function() {
+                    var me = this;
+                    this.down('#tag_box').add(Ext.create('Rally.ui.picker.TagPicker',{
+                        fieldLabel: "Tag(s):",
+                        labelAlign: "right",
+                         allowBlank: true,
+                        toolTipPreferenceKey: undefined, /* for bug avoidance */
+                        listeners: {
+                            selectionchange: function( picker, values ) {
+                                this.log( values );
+                                var names = [];
+                                me.selected_tags = [];
+                                Ext.Array.each( values, function(value) { 
+                                    me.selected_tags.push(value.ObjectID);
+                                    names.push(value.Name); 
+                                } );
+                                this.down('#tag_list_box').update( names.join(", " ));
+                                this.down('#tag_button').setDisabled(false);
+                            },
+                            scope: this
+                        }
+                    }));
+                    this.down('#tag_exe_box').add( { 
+                        xtype: 'rallybutton', 
+                        itemId: 'tag_button',
+                        text: 'Rerun Query with Tags',
+                        disabled: true,
+                        handler: function() {
+                            this.setDisabled(true);
+                            me._getDependencies(); 
+                        }
+                    });
+                    this.down('#tag_exe_box').add( { xtype: 'container', itemId: 'tag_list_box' });
+                    
+                },
+                _addAcceptedCheckbox: function() {
+                    this.hide_accepted = true;
+                    this.down('#hide_accepted_box').add({
+                        xtype: 'checkbox',
+                        fieldLabel: 'Hide Accepted?',
+                        labelAlign: "right",
+                        checked: true,
+                        listeners: {
+                            change: function(cb,newValue) {
+                                this.hide_accepted = newValue;
+                                this._getDependencies(); /* already have base data at this point */
+                            },
+                            scope: this
+                        }
+                    });
+                },
+                _addEpicCheckbox: function() {
+                    this.hide_epic_column = true;
+                    this.down('#hide_epic_box').add({
+                        xtype: 'checkbox',
+                        fieldLabel: 'Hide Epic Columns?',
+                        labelAlign: "right",
+                        labelWidth: 125,
+                        checked: true,
+                        listeners: {
+                            change: function( cb, newValue ) {
+                                this.hide_epic_column = newValue;
+                                this._redrawTables();
+                            },
+                            scope: this
+                        }
+                    });
+                },
+                _addShowBySchedule: function() {
+                    this.selected_schedule = "All";
+                    this.down('#show_group_box').add({
+                        xtype: 'radiogroup',
+                        fieldLabel: 'Show',
+                        width: 300,
+                        columns: 3,
+                        vertical: false,
+                        labelAlign: "right",
+                        items: [
+                            { boxLabel: 'All', name: 'show_sched', inputValue: 'All', checked: true },
+                            { boxLabel: 'Unscheduled', name:'show_sched', inputValue: 'Unscheduled', width: 100 },
+                            { boxLabel: 'Late', name: 'show_sched', inputValue: 'Late' }
+                        ],
+                        listeners: {
+                            change: function( radiogroup, newValue ) {
+                                this.selected_schedule = newValue.show_sched;
+                                this._redrawTables();
+                            },
+                            scope: this
+                        }
+                    });
+                },
                 _getBaseData: function() {
+                    this.tables = {};  /* google display table */
+                    this.data_tables = {}; /* google data store */
+                    this.data_views = {}; /* google data view */
                     this._getProjects();
                 },
                 _getDependencies: function() {
+                    this.showMask("Loading dependencies...");
                     this._getOurItems("Successors");
                     this._getOurItems("Predecessors");
                 },
                 _getProjects: function() {
                     var me = this;
-                    me.log( "_getProjects");
+                    this.log("_getProjects");
+                    this.showMask("Loading project names...");
                     Ext.create('Rally.data.WsapiDataStore',{
                         context: {project: null},
                         autoLoad: true,
@@ -62,14 +175,37 @@
                                 for ( var i=0; i<data_length; i++ ) {
                                     me.project_hash[ data[i].get('ObjectID') ] = { Name: data[i].get('Name') };
                                 }
-                                me._getTimeboxes();
+                                me._getTags();
                             }
                         }
                     });
                 },
+                _getTags: function() {
+                    var me = this;
+                    this.log("_getTags");
+                    this.showMask("Loading tags...");
+                    Ext.create('Rally.data.WsapiDataStore',{
+                        context: {project: null},
+                        autoLoad: true,
+                        model: 'Tag',
+                        limit: 5000,
+                        fetch: [ 'ObjectID', 'Name' ],
+                        filters: { property: "Archived", operator: "=", value: false },
+                        listeners: {
+                            load: function( store, data, success ) {
+                                var data_length = data.length;
+                                me.log( data_length );
+                                for ( var i=0; i<data_length; i++ ) {
+                                    me.tag_hash[ data[i].get('ObjectID') ] = { Name: data[i].get('Name') };
+                                }
+                                me._getTimeboxes();
+                            }
+                        }
+                    });    },
                 _getTimeboxes: function() {
                     var me = this;
-                    me.log( "_getTimeboxes" );
+                    this.log("_getTimeboxes");
+                    this.showMask("Loading timeboxes...");
                     Ext.create('Rally.data.WsapiDataStore',{
                         context: {project: null},
                         autoLoad: true,
@@ -113,39 +249,50 @@
                     });
                 },
                 _getOurItems: function( type ) {
-                	var me  = this;
+                    var me  = this;
             
-                	Ext.create('Rally.data.lookback.SnapshotStore',{
-                		autoLoad: true,
-                		limit: 1000,
-                		fetch: ['Name','_ItemHierarchy',type, 'ScheduleState', 'Project', 'Iteration', 'Release', 
-                            '_UnformattedID', 'Blocked' ],
-                        hydrate: [ 'ScheduleState' ],
-                		filters: [ {
-            	        	  property: '__At',
-            	        	  operator: '=',
-            	        	  value: 'current'
-            	          },
-            	          {
-            	        	  property: type,
-            	        	  operator: '!=',
-            	        	  value: null
-            	          },
-            	          {
-            	        	  property: '_ProjectHierarchy',
-            	        	  operator: '=',
-            	        	  value: me.getContext().getProject().ObjectID
-            	          }],
-                		listeners: {
-                			load: function( store, data, success ) {
-                				me._createRowPerDependency( type, data );
-                			}
-                		}
-                	});
+                    var filters =  [ 
+                        {
+                            property: '__At',
+                            operator: '=',
+                            value: 'current'
+                        },
+                        {
+                            property: type,
+                            operator: '!=',
+                            value: null
+                        },
+                        {
+                            property: '_ProjectHierarchy',
+                            operator: '=',
+                            value: me.getContext().getProject().ObjectID
+                        }
+                    ];
+                    if ( me.hide_accepted ) {
+                        filters.push( { property: 'ScheduleState', operator: '!=', value: 'Accepted' } );
+                    }
+                    if ( me.selected_tags.length > 0 ) {
+                        filters.push( { property: 'Tags', operator: 'in', value: me.selected_tags } );
+                    }
+                    Ext.create('Rally.data.lookback.SnapshotStore',{
+                        autoLoad: true,
+                        limit: 1000,
+                        fetch: ['Name','_ItemHierarchy',type, 'ScheduleState', 'Project', 'Iteration', 'Release', 
+                            '_UnformattedID', 'Blocked', 'Tags' ],
+                        hydrate: [ 'ScheduleState','Tags' ],
+                        filters: filters,
+                        order: { property: 'ObjectID' },
+                        listeners: {
+                            load: function( store, data, success ) {
+                                me._createRowPerDependency( type, data );
+                            }
+                        }
+                    });
                 },
                 _createRowPerDependency: function( type, data ) {
                     var me = this;
                     me.log( [ "_createRowPerDependency " + type, data.length ] );
+                    this.showMask("Creating Tables...");
                     var number_of_items_with_dependencies = data.length;
                     var rows = [];
                     
@@ -158,38 +305,45 @@
                         var dependent_ids = data[i].get(type);
                         me.our_hash[ data[i].get('ObjectID') ] = data[i].data;
                         if ( me.project_hash.hasOwnProperty(data[i].get('Project')) ) {
-            	            for ( var j=0; j< dependent_ids.length; j++ ) {
-            			        rows.push({
-            	                    epic: false,
-            	                    epic_report: "",
+                            var tags = [];
+                            if ( data[i].get('Tags') && data[i].get('Tags').length > 0 ) {
+                                Ext.Array.each( data[i].get('Tags'), function(tag) {
+                                    if ( me.tag_hash[tag] ) { tags.push( me.tag_hash[tag].Name ); }
+                                });
+                            }
+                            for ( var j=0; j< dependent_ids.length; j++ ) {
+                                rows.push({
+                                    epic: false,
+                                    epic_report: "",
                                     blocked: data[i].get('Blocked'),
-            	                    object_id: data[i].get('ObjectID'),
-            			            direction: direction,
-            			            project: data[i].get('Project'),
-            			            name: "US" + data[i].get('_UnformattedID') + ": " + data[i].get('Name') ,
-            			            schedule_state: data[i].get('ScheduleState'),
-            			            release: data[i].get('Release'),
-            			            iteration: data[i].get('Iteration'),
-            	                    iteration_name: "",
-            			            release_date: null,
-            			            iteration_date: null,
-            	                    other_id: dependent_ids[j],
-            			            other_project: 'tbd',
-            			            other_name: 'tbd',
+                                    object_id: data[i].get('ObjectID'),
+                                    direction: direction,
+                                    project: data[i].get('Project'),
+                                    name: "US" + data[i].get('_UnformattedID') + ": " + data[i].get('Name') ,
+                                    schedule_state: data[i].get('ScheduleState'),
+                                    release: data[i].get('Release'),
+                                    iteration: data[i].get('Iteration'),
+                                    iteration_name: "",
+                                    release_date: null,
+                                    iteration_date: null,
+                                    tags: tags.join(' '),
+                                    other_id: dependent_ids[j],
+                                    other_project: 'tbd',
+                                    other_name: 'tbd',
                                     other_blocked: false,
-            	                    other_epic: false,
-            	                    other_epic_report: "",
-            			            other_schedule_state: 'tbd',
-            			            other_release: null,
-            			            other_iteration: null,
-            			            other_release_date: null,
-            			            other_iteration_date: null,
-            			            tags: ''
-            			        });
+                                    other_epic: false,
+                                    other_epic_report: "",
+                                    other_schedule_state: 'tbd',
+                                    other_release: null,
+                                    other_iteration: null,
+                                    other_release_date: null,
+                                    other_iteration_date: null
+                                });
                             }
                         }
                     }
-                    me.log( ["rows",rows, "our_hash", me.our_hash ] );
+                    me.log( ["Rows:", rows] );
+                     me.log( ["Data:", data] );
                     me._getOurLeaves( type,rows );
                 },
             /**
@@ -346,8 +500,8 @@
                     });
                 },
                 /**
-            	 * having trouble when we have more than 300 items to look for at once
-            	 */
+                 * having trouble when we have more than 300 items to look for at once
+                 */
                 _getOtherLeaves: function(type,rows) {
                     var me = this;
                     me.log("_getLeaves: " + type);     
@@ -417,9 +571,9 @@
                         var total_kids = this.our_hash[item.object_id].children.length;
                         var scheduled_kids = this.our_hash[item.object_id].scheduled_children.length;
                         item.epic = true;
-                        item.epic_report = scheduled_kids + " of " + total_kids;
-            //                                                    me.our_hash[top_id].children_releases = [];
-            //                                    me.our_hash[top_id].children_iterations = [];
+                        var ratio = Math.round( scheduled_kids * 100 / total_kids ) + "%";
+                        item.epic_report = "(" + scheduled_kids + " of " + total_kids + ") scheduled " + ratio;
+                                    
                         var releases = this.our_hash[item.object_id].children_releases;
                         Ext.Array.each( releases, function( release ) {
                             if (( me.timebox_hash[release] ) && ( me.timebox_hash[release].EndDate > item.release_date )) {
@@ -436,10 +590,8 @@
                     return item;
                 },
                 _setOtherEpicData: function(item, other) {
-                    //this.log( other.ObjectID );
-                    if ( other.ObjectID  == "7463910659" ) {
-                        this.log( [ "_setOtherEpicData", item, other ]);
-                    }
+                    this.log( "_setOtherEpicData" );
+            
                     var me = this;
                     var releases = other.children_releases;
                     Ext.Array.each( releases, function(release) {
@@ -458,7 +610,6 @@
                 _populateRowData: function( type, rows ) {
                     var me = this;
                     this.log( "_populateRowData: " + type );
-                    this.log( [ "other_hash", this.other_hash ]);
                     var filtered_rows = [];
                     var item_length = rows.length;
                     for ( var i=0; i<item_length; i++ ) {
@@ -479,7 +630,7 @@
                                     
                         if ((item.other_id) && (this.other_hash[item.other_id])) {
                             var other = this.other_hash[item.other_id];
-                            item.other_name = "US: " + other._UnformattedID + other.Name;
+                            item.other_name = "US" + other._UnformattedID + ": " + other.Name;
                             item.other_blocked = other.Blocked;
                             item.other_schedule_state = other.ScheduleState;
                             var in_open_project = true;
@@ -494,21 +645,22 @@
                             }
                             
                             if ( in_open_project ) {
-            	                if ( other.children ) {
-            	                    var total_kids = other.children.length;
-            		                var scheduled_kids = other.scheduled_children.length;
-            		                item.other_epic = true;
-            		                item.other_epic_report = scheduled_kids + " of " + total_kids;
-            	                }
-            	                
-            		            if (( other.Iteration ) && ( this.timebox_hash[other.Iteration] )) {
-            		                item.other_iteration_date = this.timebox_hash[other.Iteration].EndDate;
-            		            }
-            		            if (( other.Release ) && ( this.timebox_hash[other.Release] )) {
-            		                item.other_release_date = this.timebox_hash[other.Release].EndDate;
-            		            }
+                                if ( other.children ) {
+                                    var total_kids = other.children.length;
+                                    var scheduled_kids = other.scheduled_children.length;
+                                    item.other_epic = true;
+                                    var ratio = Math.round( scheduled_kids * 100 / total_kids ) + "%";
+                                    item.other_epic_report = "(" + scheduled_kids + " of " + total_kids + ") scheduled " + ratio;
+                                }
+                                
+                                if (( other.Iteration ) && ( this.timebox_hash[other.Iteration] )) {
+                                    item.other_iteration_date = this.timebox_hash[other.Iteration].EndDate;
+                                }
+                                if (( other.Release ) && ( this.timebox_hash[other.Release] )) {
+                                    item.other_release_date = this.timebox_hash[other.Release].EndDate;
+                                }
                                 item = me._setOtherEpicData(item,other);
-            	                item = me._setLateColors(item);
+                                item = me._setLateColors(item);
                                 filtered_rows.push(item);
                             } 
                         }
@@ -540,7 +692,7 @@
                 _makeTable:function( type, rows ) {
                     var me = this;
                     me.log( "_makeTable: " + type);
-                    var cols = [
+                    this.columns = [
                             { id: 'direction', label: 'Your Team...', type: 'string' },
                             { id: 'project', label: 'Team', type: 'string' },
                             { id: 'epic_report', label: 'Epic', type: 'string' },
@@ -557,32 +709,32 @@
                             { id: 'tags', label: 'Tags', type: 'string' }
                         ];
                     var data_table = new google.visualization.DataTable({
-                        cols: cols
+                        cols: me.columns
                     });
                     // google table is scary because row is pushed as an array of column values
                     // that have to be matched to the cols array above (would be nice to have key indexing)
                     var number_of_rows = rows.length;
                     for ( var i=0; i<number_of_rows; i++ ) {
                         var table_row = [];
-                        Ext.Array.each( cols, function(column) {
+                        Ext.Array.each( me.columns, function(column) {
                             // iteration_out_of_sync
                             var style = {};
                             
                             if ( /^schedule_state/.test(column.id) && rows[i].blocked ) {
-                                style = { style: 'background-color: #FFCCCC' };
+                                style = { style: 'background-color: #FFCCCC', blocked: true };
                             }
                             
                             if ( /other_schedule_state/.test(column.id) && rows[i].other_blocked ) {
-                                style = { style: 'background-color: #FFCCCC' };
+                                style = { style: 'background-color: #FFCCCC', blocked: true };
                             }
                             
                             if ( /Date/.test(column.label) ) {
                                 if (! rows[i][column.id] ) {
-                                    style = { style: 'border: 3px solid yellow' };
+                                    style = { style: 'border: 3px solid yellow', unscheduled: true };
                                 } else if (/Iteration/.test(column.label) && rows[i].iteration_out_of_sync ){
-                                    style = { style: 'background-color: #FFCCCC' };
+                                    style = { style: 'background-color: #FFCCCC', late: true };
                                 } else if (/Release/.test(column.label) && rows[i].release_out_of_sync ){
-                                    style = { style: 'background-color: #FFCCCC' };
+                                    style = { style: 'background-color: #FFCCCC',late: true };
                                 }
                             }
                             table_row.push( { v: rows[i][column.id], p: style } );
@@ -590,20 +742,98 @@
                         });
                         data_table.addRow(table_row);
                     }
+                    this.data_tables[type] = data_table;
                     
                     var view = new google.visualization.DataView(data_table);
+                    this.data_views[type] = view;
+                    
                     var outer_box_id = type + '_box';
+                    var table_box_id = type + '_table_box';
+                    if ( me.down('#' + table_box_id ) ) { me.down('#'+table_box_id).destroy(); }
+                    me.down('#'+outer_box_id).add( { xtype: 'container', id: table_box_id });
                     
-                    if ( me.down('#' + outer_box_id ) ) { me.down('#'+outer_box_id).destroy(); }
-                    if ( type === "Successors" ) {
-                        me.down('#table_box').add( { xtype: 'container', html: "<h1>Your team delivering stories to other teams</h1>" } );
-                    } else {
-                        me.down('#table_box').add( { xtype: 'container', html: "<h1>Your team receiving stories from other teams</h1>" } );
+                    this.tables[type] = new google.visualization.Table( document.getElementById(table_box_id) );
+                    //this.tables[type].draw( view, { showRowNumber: false, allowHtml: true } );
+                    me._redrawTables();
+                },
+                /**
+                 * 
+                 * @param {} which_one The type of the table. Valid values are "Predecessors", "Successors", "Both"
+                 * 
+                 */
+                _redrawTables: function() {
+                    this.log( "_redrawTables" );
+                    var me = this;
+                    // reset to base data
+                    var col_array = [];
+                    for ( var i=0;i<me.columns.length;i++ ) {
+                        col_array.push(i);
                     }
-                    me.down('#table_box').add( { xtype: 'container', itemId: outer_box_id, id: outer_box_id } );
                     
-                    var table = new google.visualization.Table( document.getElementById(outer_box_id) );
-                    table.draw( view, { showRowNumber: false, allowHtml: true } );
+                    for ( var type in me.data_views ) {
+                        if ( me.data_views.hasOwnProperty(type) ) {
+                            me.data_views[type].setColumns(col_array);
+                            me.data_views[type].setRows(me.data_tables[type].getFilteredRows([{ column: 0, minValue: '' }]));
+                        }
+                    }
+                    
+                    // to filter items that we already got
+                    if ( me.selected_schedule === "Unscheduled" ) {
+                        for ( var type in me.data_views ) {
+                            if ( me.data_views.hasOwnProperty(type) ) {
+                                var filtered_rows = [];
+                                var row_indices = me.data_views[type].getFilteredRows([{ column: 0, minValue: '' }]);
+                                Ext.Array.each( row_indices, function(row_index) {
+                                    Ext.Array.each(me.columns,function(column,col_index){
+                                        if ( me.data_views[type].getProperty(row_index,col_index, "unscheduled")){
+                                            filtered_rows.push(row_index);
+                                            return false;
+                                        }
+                                    });
+                                });
+                                me.data_views[type].setRows(filtered_rows);
+                            }
+                        }
+                    } else if ( me.selected_schedule === "Late" ) {
+                        for ( var type in me.data_views ) {
+                            if ( me.data_views.hasOwnProperty(type) ) {
+                                var filtered_rows = [];
+                                var row_indices = me.data_views[type].getFilteredRows([{ column: 0, minValue: '' }]);
+                                Ext.Array.each( row_indices, function(row_index) {
+                                    Ext.Array.each(me.columns,function(column,col_index){
+                                        if ( me.data_views[type].getProperty(row_index,col_index, "late")){
+                                            filtered_rows.push(row_index);
+                                            return false;
+                                        }
+                                    });
+                                });
+                                me.data_views[type].setRows(filtered_rows);
+                            }
+                        }
+                    }
+                            
+                    // to hide columns
+                    if ( me.hide_epic_column ) {
+                        var columns_to_hide = [];
+                        Ext.Array.each(me.columns,function(column,col_index) {
+                            if ( /Epic/.test( column.label) ) {
+                                columns_to_hide.push(col_index);
+                            }
+                        });
+                        for ( var type in me.tables ) {
+                            if ( me.tables.hasOwnProperty(type) ) {
+                                me.data_views[type].hideColumns(columns_to_hide);
+                            }
+                        }
+                    }
+                    
+                    for ( var type in me.tables ) {
+                        if ( me.tables.hasOwnProperty(type) ) {
+                            me.tables[type].draw(me.data_views[type], { showRowNumber: false, allowHtml: true });
+                        }
+                    }
+                
+                    this.hideMask();
                 },
                 _setAssociatedArraysToEmpty: function(item) {
                     item.children_releases = [];
@@ -611,6 +841,15 @@
                     item.scheduled_children = [];
                     item.children = [];
                     return item;
+                },
+                showMask: function(msg) {
+                    if ( this.getEl() ) { 
+                        this.getEl().unmask();
+                        this.getEl().mask(msg);
+                    }
+                },
+                hideMask: function() {
+                    this.getEl().unmask();
                 }
             });
 
@@ -623,6 +862,10 @@
     <style type="text/css">
         .app {
              /* Add app styles here */
+        }
+        
+        .app_header {
+            font-size: 17px;
         }
     </style>
 </head>
