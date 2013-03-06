@@ -12,7 +12,7 @@ Ext.define('CustomApp', {
             },
             { xtype: 'container', defaults: { padding: 5 }, items: [
                 { xtype: 'container', html: 'Your team delivering stories to other teams', cls: "app_header" },
-                { xtype: 'container',  itemId: 'Successors_box'  }
+                { xtype: 'container',  itemId: 'Successors_box'  },
                 { xtype: 'container', html: 'Your team receiving stories from other teams', cls: "app_header" },
                 { xtype: 'container', itemId: 'Predecessors_box' }
             ]}
