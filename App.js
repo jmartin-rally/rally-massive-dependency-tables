@@ -720,12 +720,15 @@ Ext.define('CustomApp', {
         var data_table = new google.visualization.DataTable({
             cols: me.columns
         });
+
         // google table is scary because row is pushed as an array of column values
         // that have to be matched to the cols array above (would be nice to have key indexing)
+
         var number_of_rows = rows.length;
         for ( var i=0; i<number_of_rows; i++ ) {
             var table_row = [];
             Ext.Array.each( me.columns, function(column) {
+
                 // iteration_out_of_sync
                 var style = {};
                 
@@ -753,6 +756,13 @@ Ext.define('CustomApp', {
         }
         this.data_tables[type] = data_table;
         
+        var date_formatter = new google.visualization.DateFormat({formatType:'short'});
+        Ext.Array.each(me.columns,function(column,index){
+            // date format
+            if (/date/.test(column.id)) {
+                date_formatter.format(data_table,index);
+            }
+        });
         var view = new google.visualization.DataView(data_table);
         this.data_views[type] = view;
         
