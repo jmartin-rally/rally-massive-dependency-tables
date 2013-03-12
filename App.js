@@ -196,7 +196,7 @@ Ext.define('CustomApp', {
             context: {project: null},
             autoLoad: true,
             model: 'Tag',
-            limit: 5000,
+            limit: 7500,
             fetch: [ 'ObjectID', 'Name' ],
             filters: { property: "Archived", operator: "=", value: false },
             listeners: {
@@ -240,7 +240,7 @@ Ext.define('CustomApp', {
         Ext.create('Rally.data.WsapiDataStore',{
             context: { project: null },
             autoLoad: true,
-            limit: 5000,
+            limit: 7500,
             model: 'Iteration',
             fetch: [ 'ObjectID', 'EndDate' ],
             filters: { property: "ObjectID", operator: ">", value: 0 },
@@ -861,7 +861,7 @@ Ext.define('CustomApp', {
         this.getEl().unmask();
     },
     _getLinkedName: function(item) {
-        this.log( item );
+        this.log( "_getLinkedName" );
         if ( ! item._ref ) {
             item._ref = "/hierarchicalrequirement/" + item.ObjectID;
         }

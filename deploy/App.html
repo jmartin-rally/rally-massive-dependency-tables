@@ -1,16 +1,13 @@
 <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Dependency Report</title>
-    
-        <script type="text/javascript" src="/apps/2.0p5/sdk.js"></script>
-    
-        <script type="text/javascript" src="https://www.google.com/jsapi"></script>
-    
-        <script type="text/javascript">
-            google.load('visualization', '1', {packages:['table']});
-            google.setOnLoadCallback(function() {
-                Ext.define('CustomApp', {
+<html>
+<head>
+    <title>Dependency Report</title>
+
+    <script type="text/javascript" src="/apps/2.0p5/sdk.js"></script>
+
+    <script type="text/javascript">
+        Rally.onReady(function() {
+            Ext.define('CustomApp', {
                 extend: 'Rally.app.App',
                 componentCls: 'app',
                 items: [
@@ -208,7 +205,7 @@
                         context: {project: null},
                         autoLoad: true,
                         model: 'Tag',
-                        limit: 5000,
+                        limit: 7500,
                         fetch: [ 'ObjectID', 'Name' ],
                         filters: { property: "Archived", operator: "=", value: false },
                         listeners: {
@@ -252,7 +249,7 @@
                     Ext.create('Rally.data.WsapiDataStore',{
                         context: { project: null },
                         autoLoad: true,
-                        limit: 5000,
+                        limit: 7500,
                         model: 'Iteration',
                         fetch: [ 'ObjectID', 'EndDate' ],
                         filters: { property: "ObjectID", operator: ">", value: 0 },
@@ -873,7 +870,7 @@
                     this.getEl().unmask();
                 },
                 _getLinkedName: function(item) {
-                    this.log( item );
+                    this.log( "_getLinkedName" );
                     if ( ! item._ref ) {
                         item._ref = "/hierarchicalrequirement/" + item.ObjectID;
                     }
