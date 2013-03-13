@@ -701,17 +701,27 @@ Ext.define('CustomApp', {
     _makeTable:function( type, rows ) {
         var me = this;
         me.log( "_makeTable: " + type);
+        var left_story = "Providing Story";
+        var right_story = "Story";
+        var left_team = "Team";
+        var right_team = "Receiving Project";
+        if ( type === "Predecessors" ) {
+            left_story = "Receiving Story";
+            right_story = "Providing Story";
+            right_team = "Providing Project";
+        }
+        
         this.columns = [
                 { id: 'direction', label: 'Your Team...', type: 'string' },
-                { id: 'project', label: 'Team', type: 'string' },
+                { id: 'project', label: left_team, type: 'string' },
                 { id: 'epic_report', label: 'Epic', type: 'string' },
-                { id: 'name', label: 'Our Story', type: 'string' },
+                { id: 'name', label: left_story, type: 'string' },
                 { id: 'schedule_state', label: 'State', type: 'string' },
                 { id: 'release_date', label: 'Release Date', type: 'date' },
                 { id: 'iteration_date', label: 'Iteration Date', type: 'date' },
-                { id: 'other_project', label: 'Other Team', type: 'string' },
+                { id: 'other_project', label: right_team, type: 'string' },
                 { id: 'other_epic_report', label: 'Epic', type: 'string' },
-                { id: 'other_name', label: 'Their Story', type: 'string' },
+                { id: 'other_name', label: right_story, type: 'string' },
                 { id: 'other_schedule_state', label: 'State', type: 'string' },
                 { id: 'other_release_date', label: 'Release Date', type: 'date' },
                 { id: 'other_iteration_date', label: 'Iteration Date', type: 'date' },
