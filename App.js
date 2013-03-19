@@ -889,8 +889,9 @@ Ext.define('CustomApp', {
             item.FormattedID = "US" + item._UnformattedID; /* TODO: change this for other customers */
         }
         var url = Rally.util.Navigation.createRallyDetailUrl(item);
-        //var formatted_string = "<a target='_top' href='" + url + "'>" + item.FormattedID + "</a>: " + item.Name;
-        var formatted_string = "<a target='_blank' href='" + url + "'>" + item.FormattedID + "</a>: " + item.Name;
+        //var url = "/slm/detail/ar/"+item.ObjectID;
+        var formatted_string = "<a target='_top' href='" + url + "'>" + item.FormattedID + "</a>: " + item.Name;
+        //var formatted_string = "<a target='_blank' href='" + url + "'>" + item.FormattedID + "</a>: " + item.Name;
         return formatted_string;
     }
 });

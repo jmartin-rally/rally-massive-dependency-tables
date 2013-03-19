@@ -1,13 +1,16 @@
 <!DOCTYPE html>
-<html>
-<head>
-    <title>Dependency Report</title>
-
-    <script type="text/javascript" src="/apps/2.0p5/sdk.js"></script>
-
-    <script type="text/javascript">
-        Rally.onReady(function() {
-            Ext.define('CustomApp', {
+    <html>
+    <head>
+        <title>Dependency Report</title>
+    
+        <script type="text/javascript" src="/apps/2.0p5/sdk.js"></script>
+    
+        <script type="text/javascript" src="https://www.google.com/jsapi"></script>
+    
+        <script type="text/javascript">
+            google.load('visualization', '1', {packages:['table']});
+            google.setOnLoadCallback(function() {
+              Ext.define('CustomApp', {
                 extend: 'Rally.app.App',
                 componentCls: 'app',
                 items: [
@@ -714,7 +717,7 @@
                     var right_story = "Story";
                     var left_team = "Team";
                     var right_team = "Receiving Project";
-                    if ( type === "Receives" ) {
+                    if ( type === "Predecessors" ) {
                         left_story = "Receiving Story";
                         right_story = "Providing Story";
                         right_team = "Providing Project";
@@ -898,8 +901,9 @@
                         item.FormattedID = "US" + item._UnformattedID; /* TODO: change this for other customers */
                     }
                     var url = Rally.util.Navigation.createRallyDetailUrl(item);
-                    //var formatted_string = "<a target='_top' href='" + url + "'>" + item.FormattedID + "</a>: " + item.Name;
-                    var formatted_string = "<a target='_blank' href='" + url + "'>" + item.FormattedID + "</a>: " + item.Name;
+                    //var url = "/slm/detail/ar/"+item.ObjectID;
+                    var formatted_string = "<a target='_top' href='" + url + "'>" + item.FormattedID + "</a>: " + item.Name;
+                    //var formatted_string = "<a target='_blank' href='" + url + "'>" + item.FormattedID + "</a>: " + item.Name;
                     return formatted_string;
                 }
             });

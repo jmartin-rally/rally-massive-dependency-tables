@@ -40,5 +40,3 @@ in debug:
             google.setOnLoadCallback(function() {
                 Ext.define('CustomApp', {
                         ...
-    
-    
