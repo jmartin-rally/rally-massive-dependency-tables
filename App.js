@@ -1,4 +1,14 @@
-Ext.define('CustomApp', {
+/* 
+ * NOTES:
+ * * MAKE SURE TO READ THE README for building/compiling manual steps
+ * * This is dependent upon the existence of and access to Google Tables
+ *
+ * Modifications: 
+ * 22 Mar 2013: Hide accepted only if accepted on BOTH sides
+ * 
+ * 
+ */
+ Ext.define('CustomApp', {
     extend: 'Rally.app.App',
     componentCls: 'app',
     items: [
@@ -258,8 +268,6 @@ Ext.define('CustomApp', {
     },
     _getOurItems: function( type ) {
         var me  = this;
-
-        
         var filters =  [ 
             {
                 property: '__At',
@@ -277,18 +285,18 @@ Ext.define('CustomApp', {
                 value: me.getContext().getProject().ObjectID
             }
         ];
-        if ( me.hide_accepted ) {
+        /* if ( me.hide_accepted ) {
             filters.push( { property: 'ScheduleState', operator: '!=', value: 'Accepted' } );
-        }
+        }*/
         if ( me.selected_tags.length > 0 ) {
             filters.push( { property: 'Tags', operator: 'in', value: me.selected_tags } );
         }
         Ext.create('Rally.data.lookback.SnapshotStore',{
             autoLoad: true,
-            limit: 1000,
-            fetch: ['Name','_ItemHierarchy',type, 'ScheduleState', 'Project', 'Iteration', 'Release', 
-                '_UnformattedID', 'Blocked', 'Tags' ],
-            hydrate: [ 'ScheduleState','Tags' ],
+            limit: 3000,
+            fetch: ['Name','_ItemHierarchy',type,'ScheduleState','Project','Iteration','Release', 
+                '_UnformattedID','Blocked','Tags'],
+            hydrate: ['ScheduleState','Tags'],
             filters: filters,
             order: { property: 'ObjectID' },
             listeners: {
@@ -311,6 +319,9 @@ Ext.define('CustomApp', {
         }
         
         for ( var i=0; i<number_of_items_with_dependencies; i++ ) {
+            if ( data[i].get('_UnformattedID') == 19687 ) {
+                console.log (" -------- ", type, data[i].get('ObjectID'), data[i] );
+            }
             var dependent_ids = data[i].get(type);
             me.our_hash[ data[i].get('ObjectID') ] = data[i].data;
             if ( me.project_hash.hasOwnProperty(data[i].get('Project')) ) {
@@ -351,8 +362,7 @@ Ext.define('CustomApp', {
                 }
             }
         }
-        me.log( ["Rows:", rows] );
-         me.log( ["Data:", data] );
+        me.log( ["Rows:", rows, "Data:", data] );
         me._getOurLeaves( type,rows );
     },
 /**
@@ -390,7 +400,6 @@ Ext.define('CustomApp', {
             listeners: {
                 load: function( store, data, success ) {
                     var data_length = data.length;
-                    me.log( "load leaves snapshot" );
                     for ( var i=0;i<data_length;i++ ) {
                         // only care if this is the child of one we already got
                         if ( data[i].get('_ItemHierarchy').length > 1 ) {
@@ -599,7 +608,7 @@ Ext.define('CustomApp', {
         return item;
     },
     _setOtherEpicData: function(item, other) {
-        this.log( "_setOtherEpicData" );
+        //this.log( "_setOtherEpicData" );
 
         var me = this;
         var releases = other.children_releases;
@@ -616,6 +625,14 @@ Ext.define('CustomApp', {
         });
         return item;
     },
+    _isNotHidden: function(item) {
+        if ( this.hide_accepted && item.schedule_state === "Accepted" ) {
+            if ((item.other_id) && (this.other_hash[item.other_id]) && (this.other_hash[item.other_id].ScheduleState === "Accepted")) {
+                return false;
+            }
+        }
+        return true;
+    },
     _populateRowData: function( type, rows ) {
         var me = this;
         this.log( "_populateRowData: " + type );
@@ -623,55 +640,57 @@ Ext.define('CustomApp', {
         var item_length = rows.length;
         for ( var i=0; i<item_length; i++ ) {
             var item = rows[i];
-            if (( item.iteration !== "" ) && ( this.timebox_hash[item.iteration] )) {
-                item.iteration_date = this.timebox_hash[item.iteration].EndDate;
-            }
-            if (( item.release !== "" ) && ( this.timebox_hash[item.release] )) {
-                item.release_date = this.timebox_hash[item.release].EndDate;
-            }
-            if (( item.project ) && (this.project_hash[item.project])) {
-                item.project = this.project_hash[item.project].Name;
-            } else { 
-                item.project = "Unknown " + item.project;
-            }
-            
-            item = me._setItemEpicData(item);
-                        
-            if ((item.other_id) && (this.other_hash[item.other_id])) {
-                var other = this.other_hash[item.other_id];
-                item.other_name =  me._getLinkedName(other);
-                item.other_blocked = other.Blocked;
-                item.other_schedule_state = other.ScheduleState;
-                var in_open_project = true;
-                if ( other.Project ) {
-                    if ( this.project_hash[ other.Project ] ) {
-                        item.other_project = this.project_hash[other.Project].Name;
-                    } else {
-                        item.other_project = "Unknown " + other.Project;
-                        //this.log( [ "Removed because in a closed project: " + other.Name ] );
-                        in_open_project = false;
-                    }
+            if ( me._isNotHidden(item) ) {
+                if (( item.iteration !== "" ) && ( this.timebox_hash[item.iteration] )) {
+                    item.iteration_date = this.timebox_hash[item.iteration].EndDate;
+                }
+                if (( item.release !== "" ) && ( this.timebox_hash[item.release] )) {
+                    item.release_date = this.timebox_hash[item.release].EndDate;
+                }
+                if (( item.project ) && (this.project_hash[item.project])) {
+                    item.project = this.project_hash[item.project].Name;
+                } else { 
+                    item.project = "Unknown " + item.project;
                 }
                 
-                if ( in_open_project ) {
-                    if ( other.children ) {
-                        var total_kids = other.children.length;
-                        var scheduled_kids = other.scheduled_children.length;
-                        item.other_epic = true;
-                        var ratio = Math.round( scheduled_kids * 100 / total_kids ) + "%";
-                        item.other_epic_report = "(" + scheduled_kids + " of " + total_kids + ") scheduled " + ratio;
+                item = me._setItemEpicData(item);
+                            
+                if ((item.other_id) && (this.other_hash[item.other_id])) {
+                    var other = this.other_hash[item.other_id];
+                    item.other_name =  me._getLinkedName(other);
+                    item.other_blocked = other.Blocked;
+                    item.other_schedule_state = other.ScheduleState;
+                    var in_open_project = true;
+                    if ( other.Project ) {
+                        if ( this.project_hash[ other.Project ] ) {
+                            item.other_project = this.project_hash[other.Project].Name;
+                        } else {
+                            item.other_project = "Unknown " + other.Project;
+                            //this.log( [ "Removed because in a closed project: " + other.Name ] );
+                            in_open_project = false;
+                        }
                     }
                     
-                    if (( other.Iteration ) && ( this.timebox_hash[other.Iteration] )) {
-                        item.other_iteration_date = this.timebox_hash[other.Iteration].EndDate;
-                    }
-                    if (( other.Release ) && ( this.timebox_hash[other.Release] )) {
-                        item.other_release_date = this.timebox_hash[other.Release].EndDate;
-                    }
-                    item = me._setOtherEpicData(item,other);
-                    item = me._setLateColors(item);
-                    filtered_rows.push(item);
-                } 
+                    if ( in_open_project ) {
+                        if ( other.children ) {
+                            var total_kids = other.children.length;
+                            var scheduled_kids = other.scheduled_children.length;
+                            item.other_epic = true;
+                            var ratio = Math.round( scheduled_kids * 100 / total_kids ) + "%";
+                            item.other_epic_report = "(" + scheduled_kids + " of " + total_kids + ") scheduled " + ratio;
+                        }
+                        
+                        if (( other.Iteration ) && ( this.timebox_hash[other.Iteration] )) {
+                            item.other_iteration_date = this.timebox_hash[other.Iteration].EndDate;
+                        }
+                        if (( other.Release ) && ( this.timebox_hash[other.Release] )) {
+                            item.other_release_date = this.timebox_hash[other.Release].EndDate;
+                        }
+                        item = me._setOtherEpicData(item,other);
+                        item = me._setLateColors(item);
+                        filtered_rows.push(item);
+                    } 
+                }
             }
         }
         this._makeTable( type, filtered_rows );
@@ -881,7 +900,7 @@ Ext.define('CustomApp', {
         this.getEl().unmask();
     },
     _getLinkedName: function(item) {
-        this.log( "_getLinkedName" );
+        //this.log( "_getLinkedName" );
         if ( ! item._ref ) {
             item._ref = "/hierarchicalrequirement/" + item.ObjectID;
         }
