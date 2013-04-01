@@ -1,16 +1,23 @@
 <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Dependency Report</title>
-    
-        <script type="text/javascript" src="/apps/2.0p5/sdk.js"></script>
-    
-        <script type="text/javascript" src="https://www.google.com/jsapi"></script>
-    
-        <script type="text/javascript">
-            google.load('visualization', '1', {packages:['table']});
-            google.setOnLoadCallback(function() {
-                Ext.define('CustomApp', {
+<html>
+<head>
+    <title>Dependency Report</title>
+
+    <script type="text/javascript" src="/apps/2.0p5/sdk.js"></script>
+
+    <script type="text/javascript">
+        Rally.onReady(function() {
+            /* 
+             * NOTES:
+             * * MAKE SURE TO READ THE README for building/compiling manual steps
+             * * This is dependent upon the existence of and access to Google Tables
+             *
+             * Modifications: 
+             * 22 Mar 2013: Hide accepted only if accepted on BOTH sides
+             * 
+             * 
+             */
+             Ext.define('CustomApp', {
                 extend: 'Rally.app.App',
                 componentCls: 'app',
                 items: [
@@ -50,7 +57,7 @@
             //        if ( ( typeof(msg) == "object" ) && ( msg.length ) ) {
             //            Ext.Array.each( msg, function( one_msg ) { me.log( one_msg ); } );
             //        } else {
-                        window.console && console.log( new Date(), msg );
+            //            window.console && console.log( new Date(), msg );
             //        }
                 },
                 _addPrintButton: function() {
@@ -111,7 +118,7 @@
                     this.hide_accepted = true;
                     this.down('#hide_box').add({
                         xtype: 'checkbox',
-                        stateId: 'pxs.dependency.accepted',
+                        /*stateId: 'pxs.dependency.accepted',
                         stateful: true,
                         stateEvents: ['change'],
                         getState: function() {
@@ -123,7 +130,7 @@
                             if ( state ) {
                                 this.setValue(state.value);
                             }
-                        },
+                        },*/
                         fieldLabel: 'Hide Accepted?',
                         labelAlign: "left",
                         labelWidth: 110,
@@ -924,6 +931,7 @@
                 _print: function() {
                     
                     var box_to_print = this.down('#table_box').getEl().getHTML();
+                    box_to_print = box_to_print.replace(/style=\"width.*?\"/,"");
                     var configuration = "<h1>Settings</h1>";
                     
                     configuration += "Schedule: Show " + this.selected_schedule + "<br/>";
@@ -940,16 +948,18 @@
                     if ( this.selected_tags.length > 0 ) {
                         configuration += "Tags: " + this.down('#tag_list_box').getEl().getHTML();
                     }
-                    var print_window = window.open('','', 'width=1100,height=200');
+                    var print_window = window.open('','', 'width=600,height=200');
                     print_window.focus();
                     print_window.document.write('<html><head>');
                     print_window.document.write('<title>Print</title>');
                     print_window.document.write('<link rel="Stylesheet" type="text/css" href="' + this._getBaseURL() + 'apps/2.0p5/rui/resources/css/rui.css" />');
                     print_window.document.write('<style type="text/css">');
                     print_window.document.write('.app_header { font-size: 22px; }');
-                    print_window.document.write('.pxs-no-break    { page-break-inside:avoid; page-break-after:auto }');
-                    print_window.document.write('.pxs-print-section { margin: 5px; padding: 5px; } ');
-                    print_window.document.write('.pxs-print-cell { margin: 5px; padding: 5px; }' );
+                    print_window.document.write('table { border-spacing: 2px; border-color: gray; ' +
+                            'page-break-inside:avoid; page-break-after:auto; }');
+                    print_window.document.write('.google-visualization-table-td { border: 1px solid #eee; padding-right: 3px; ' +
+                            'padding-left: 3px; padding-top: 2px; padding-bottom: 2px;' +
+                            'page-break-inside:avoid; page-break-after:auto; }');
                     print_window.document.write('</style>');
                     
                     print_window.document.write('</head>');
@@ -959,8 +969,8 @@
                     print_window.document.write('</body>');
                     print_window.document.write('</html>'); 
                     
-                    //print_window.print();
-                    //print_window.close();
+                    print_window.print();
+                    print_window.close();
                     return false;
                 },
                 _getLinkedName: function(item) {

@@ -48,7 +48,7 @@
 //        if ( ( typeof(msg) == "object" ) && ( msg.length ) ) {
 //            Ext.Array.each( msg, function( one_msg ) { me.log( one_msg ); } );
 //        } else {
-            window.console && console.log( new Date(), msg );
+//            window.console && console.log( new Date(), msg );
 //        }
     },
     _addPrintButton: function() {
@@ -109,7 +109,7 @@
         this.hide_accepted = true;
         this.down('#hide_box').add({
             xtype: 'checkbox',
-            stateId: 'pxs.dependency.accepted',
+            /*stateId: 'pxs.dependency.accepted',
             stateful: true,
             stateEvents: ['change'],
             getState: function() {
@@ -121,7 +121,7 @@
                 if ( state ) {
                     this.setValue(state.value);
                 }
-            },
+            },*/
             fieldLabel: 'Hide Accepted?',
             labelAlign: "left",
             labelWidth: 110,
