@@ -5,19 +5,12 @@
 
     <script type="text/javascript" src="/apps/2.0p5/sdk.js"></script>
 
+    <script type="text/javascript" src="https://www.google.com/jsapi"></script>
+
     <script type="text/javascript">
-        Rally.onReady(function() {
-            /* 
-             * NOTES:
-             * * MAKE SURE TO READ THE README for building/compiling manual steps
-             * * This is dependent upon the existence of and access to Google Tables
-             *
-             * Modifications: 
-             * 22 Mar 2013: Hide accepted only if accepted on BOTH sides
-             * 
-             * 
-             */
-             Ext.define('CustomApp', {
+        google.load('visualization', '1', {packages:['table']});
+        google.setOnLoadCallback(function() {
+            Ext.define('CustomApp', {
                 extend: 'Rally.app.App',
                 componentCls: 'app',
                 items: [
