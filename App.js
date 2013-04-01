@@ -12,22 +12,24 @@
     extend: 'Rally.app.App',
     componentCls: 'app',
     items: [
-            { xtype: 'container', itemId: 'selector_box', padding: 15, layout: { type:'hbox' }, defaults: { padding: 15 }, 
-                items: [ 
-                    { xtype: 'container', itemId: 'hide_accepted_box'}, 
-                    { xtype: 'container', itemId: 'hide_epic_box'}, 
-                    { xtype: 'container', itemId: 'tag_box' },
+        { xtype: 'container', itemId: 'print_button_box', padding: 5},
+        { xtype: 'container', itemId: 'outer_box', items: [
+            { xtype: 'container', itemId: 'selector_box', layout: { type:'hbox' }, defaults: { padding: 15 }, 
+                items: [
+                    { xtype: 'container', itemId: 'hide_box'}, 
+                    { xtype: 'container', itemId: 'tag_box'},
                     { xtype: 'container', itemId: 'tag_exe_box', layout: { type: 'vbox' } },
                     { xtype: 'container', itemId: 'show_group_box' }
                 ]
             },
-            { xtype: 'container', defaults: { padding: 5 }, items: [
+            { xtype: 'container', itemId: 'table_box', defaults: { padding: 5 }, items: [
                 { xtype: 'container', html: 'Your team delivering stories to other teams', cls: "app_header" },
                 { xtype: 'container',  itemId: 'Successors_box'  },
                 { xtype: 'container', html: 'Your team receiving stories from other teams', cls: "app_header" },
                 { xtype: 'container', itemId: 'Predecessors_box' }
             ]}
-        ],
+        ]}
+    ],
     our_hash: {}, /* key is object id, content is the story from our project associated with that object id */
     other_hash: {}, /* key is object id, content is the story associated with that object id */
     /* THINGS WE CAN'T GET FROM LOOKBACK API: */
@@ -37,6 +39,7 @@
     selected_tags: [],
     launch: function() {
         this.first_run = true;
+        this._addPrintButton();
         this._addSelectors();
         this._getBaseData();
     },
@@ -47,6 +50,18 @@
 //        } else {
             window.console && console.log( new Date(), msg );
 //        }
+    },
+    _addPrintButton: function() {
+        var me = this;
+        this.down('#print_button_box').add( { 
+            xtype: 'rallybutton', 
+            itemId: 'print_button',
+            text: 'Print',
+            disabled: false,
+            handler: function() {
+                me._print(); 
+            }
+        });
     },
     _addSelectors: function() {
         this._addShowBySchedule();
@@ -92,7 +107,7 @@
     _addAcceptedCheckbox: function() {
         var me = this;
         this.hide_accepted = true;
-        this.down('#hide_accepted_box').add({
+        this.down('#hide_box').add({
             xtype: 'checkbox',
             stateId: 'pxs.dependency.accepted',
             stateful: true,
@@ -108,7 +123,8 @@
                 }
             },
             fieldLabel: 'Hide Accepted?',
-            labelAlign: "right",
+            labelAlign: "left",
+            labelWidth: 110,
             checked: true,
             listeners: {
                 change: function(cb,newValue) {
@@ -124,11 +140,11 @@
     },
     _addEpicCheckbox: function() {
         this.hide_epic_column = true;
-        this.down('#hide_epic_box').add({
+        this.down('#hide_box').add({
             xtype: 'checkbox',
             fieldLabel: 'Hide Epic Columns?',
-            labelAlign: "right",
-            labelWidth: 125,
+            labelAlign: "left",
+            labelWidth: 110,
             checked: true,
             listeners: {
                 change: function( cb, newValue ) {
@@ -898,6 +914,55 @@
     },
     hideMask: function() {
         this.getEl().unmask();
+    },
+    _getBaseURL: function() {
+        var base_url = this.getContext().getWorkspace()._ref.replace(/slm[\w\W]*/,"");
+        return base_url;
+    },
+    _print: function() {
+        
+        var box_to_print = this.down('#table_box').getEl().getHTML();
+        box_to_print = box_to_print.replace(/style=\"width.*?\"/,"");
+        var configuration = "<h1>Settings</h1>";
+        
+        configuration += "Schedule: Show " + this.selected_schedule + "<br/>";
+        if (this.hide_accepted) { 
+            configuration += "Hide items accepted on both sides.<br/>";
+        } else {
+            configuration += "Do NOT hide items accepted on both sides.<br/>";
+        }
+        if ( this.hide_epic_column ) {
+            configuration += "Hide the epic column.<br/>";
+        } else {
+            configuration += "Do NOT hide the epic column.<br/>";
+        }
+        if ( this.selected_tags.length > 0 ) {
+            configuration += "Tags: " + this.down('#tag_list_box').getEl().getHTML();
+        }
+        var print_window = window.open('','', 'width=600,height=200');
+        print_window.focus();
+        print_window.document.write('<html><head>');
+        print_window.document.write('<title>Print</title>');
+        print_window.document.write('<link rel="Stylesheet" type="text/css" href="' + this._getBaseURL() + 'apps/2.0p5/rui/resources/css/rui.css" />');
+        print_window.document.write('<style type="text/css">');
+        print_window.document.write('.app_header { font-size: 22px; }');
+        print_window.document.write('table { border-spacing: 2px; border-color: gray; ' +
+                'page-break-inside:avoid; page-break-after:auto; }');
+        print_window.document.write('.google-visualization-table-td { border: 1px solid #eee; padding-right: 3px; ' +
+                'padding-left: 3px; padding-top: 2px; padding-bottom: 2px;' +
+                'page-break-inside:avoid; page-break-after:auto; }');
+        print_window.document.write('</style>');
+        
+        print_window.document.write('</head>');
+        print_window.document.write('<body>');
+        print_window.document.write(configuration);
+        print_window.document.write( box_to_print );
+        print_window.document.write('</body>');
+        print_window.document.write('</html>'); 
+        
+        print_window.print();
+        print_window.close();
+        return false;
     },
     _getLinkedName: function(item) {
         //this.log( "_getLinkedName" );
