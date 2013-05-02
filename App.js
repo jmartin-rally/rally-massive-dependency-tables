@@ -11,7 +11,7 @@
  Ext.define('CustomApp', {
     extend: 'Rally.app.App',
     componentCls: 'app',
-    version: '2.4',
+    version: '2.4a',
     items: [
         { xtype: 'container', itemId: 'print_button_box', padding: 5},
         { xtype: 'container', itemId: 'outer_box', items: [
@@ -399,7 +399,7 @@
     _doNestedOurLeavesArray: function( type, rows, very_long_array, start_index ) {
         var me = this;
         me.log( [ "_doNestedOurLeavesArray", start_index, very_long_array.length ] );
-        var gap = 25;
+        var gap = 1000;
         var sliced_array = very_long_array.slice(start_index, start_index + gap);
         
         var query = Ext.create('Rally.data.lookback.QueryFilter',{
@@ -480,7 +480,7 @@
     },
     _doNestedOtherArray: function( type, rows, other_id_array, start_index ) {
         var me = this;
-        var gap = 25;
+        var gap = 1000;
         me.log(["_doNestedOtherArray",start_index, other_id_array.length]);
         
         var sliced_array = other_id_array.slice(start_index, start_index + gap);
@@ -563,7 +563,7 @@
     _doNestedOtherLeavesArray: function( type, rows, very_long_array, start_index ) {
         var me = this;
         me.log( [ "_doNestedOtherArray", start_index, very_long_array.length ] );
-        var gap = 20;
+        var gap = 1000;
         var sliced_array = very_long_array.slice(start_index, start_index + gap);
         
         var query = Ext.create('Rally.data.lookback.QueryFilter',{
