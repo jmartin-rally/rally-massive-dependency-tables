@@ -5,12 +5,13 @@
  *
  * Modifications: 
  * 22 Mar 2013: Hide accepted only if accepted on BOTH sides
- * 
+ * 02 Apr 2013: Workaround for project scoping/permission problem
  * 
  */
  Ext.define('CustomApp', {
     extend: 'Rally.app.App',
     componentCls: 'app',
+    version: '2.4',
     items: [
         { xtype: 'container', itemId: 'print_button_box', padding: 5},
         { xtype: 'container', itemId: 'outer_box', items: [
@@ -35,6 +36,7 @@
     /* THINGS WE CAN'T GET FROM LOOKBACK API: */
     timebox_hash: {}, /* key is object id of iteration or release. Changed both to have EndDate */
     project_hash: {}, /* key is object id of projecs */
+    project_array: [], /* object IDs */
     tag_hash: {}, /* key is object id of tags */
     selected_tags: [],
     launch: function() {
@@ -44,12 +46,7 @@
         this._getBaseData();
     },
     log: function( msg ) {
-        var me = this;
-//        if ( ( typeof(msg) == "object" ) && ( msg.length ) ) {
-//            Ext.Array.each( msg, function( one_msg ) { me.log( one_msg ); } );
-//        } else {
-//            window.console && console.log( new Date(), msg );
-//        }
+        window.console && console.log( new Date(), msg );
     },
     _addPrintButton: function() {
         var me = this;
@@ -208,6 +205,7 @@
                     me.log( data_length );
                     for ( var i=0; i<data_length; i++ ) {
                         me.project_hash[ data[i].get('ObjectID') ] = { Name: data[i].get('Name') };
+                        me.project_array.push(data[i].get('ObjectID'));
                     }
                     me._getTags();
                 }
@@ -273,7 +271,7 @@
             listeners: {
                 load: function( store, data, success ) {
                     var data_length = data.length;
-                    me.log( data_length );
+                    me.log( ["Iterations",data_length] );
                     for ( var i=0; i<data_length; i++ ) {
                         me.timebox_hash[ data[i].get('ObjectID') ] = { EndDate: data[i].get('EndDate') };
                     }
@@ -283,6 +281,7 @@
         });
     },
     _getOurItems: function( type ) {
+        this.log(["_getOurItems",type]);
         var me  = this;
         var filters =  [ 
             {
@@ -307,6 +306,8 @@
         if ( me.selected_tags.length > 0 ) {
             filters.push( { property: 'Tags', operator: 'in', value: me.selected_tags } );
         }
+        filters.push({property:'Project',operator:'in',value: me.project_array});
+        
         Ext.create('Rally.data.lookback.SnapshotStore',{
             autoLoad: true,
             limit: 3000,
@@ -317,6 +318,7 @@
             order: { property: 'ObjectID' },
             listeners: {
                 load: function( store, data, success ) {
+                    me.log(["_getOurItems.load",type,success]);
                     me._createRowPerDependency( type, data );
                 }
             }
@@ -325,7 +327,6 @@
     _createRowPerDependency: function( type, data ) {
         var me = this;
         me.log( [ "_createRowPerDependency " + type, data.length ] );
-        this.showMask("Creating Tables...");
         var number_of_items_with_dependencies = data.length;
         var rows = [];
         
@@ -386,7 +387,8 @@
  */
     _getOurLeaves: function(type,rows) {
         var me = this;
-        me.log("_getLeaves: " + type);     
+        me.log("_getLeaves: " + type);  
+        this.showMask("Getting Leaf Data...");
         var row_length = rows.length;
         var very_long_array = [];
         for ( var i=0;i<row_length;i++ ) {
@@ -396,8 +398,8 @@
     },
     _doNestedOurLeavesArray: function( type, rows, very_long_array, start_index ) {
         var me = this;
-        me.log( [ "_doNestedArray", start_index, very_long_array ] );
-        var gap = 300;
+        me.log( [ "_doNestedOurLeavesArray", start_index, very_long_array.length ] );
+        var gap = 25;
         var sliced_array = very_long_array.slice(start_index, start_index + gap);
         
         var query = Ext.create('Rally.data.lookback.QueryFilter',{
@@ -408,6 +410,10 @@
             property: 'Children', operator: '=', value: null
         }));
         query = query.and(Ext.create('Rally.data.lookback.QueryFilter',{property: '__At', operator: '=',value: 'current' }));
+        
+        query = query.and(Ext.create('Rally.data.lookback.QueryFilter',
+            {property:'Project',operator:'in',value: me.project_array}));
+        
         Ext.create('Rally.data.lookback.SnapshotStore',{
             autoLoad: true,
             limit: gap,
@@ -415,6 +421,7 @@
             filters: query,
             listeners: {
                 load: function( store, data, success ) {
+                    me.log(["_doNestedOurLeavesArray.load", success]);
                     var data_length = data.length;
                     for ( var i=0;i<data_length;i++ ) {
                         // only care if this is the child of one we already got
@@ -473,13 +480,19 @@
     },
     _doNestedOtherArray: function( type, rows, other_id_array, start_index ) {
         var me = this;
-        var gap = 300;
-        var sliced_array = other_id_array.slice(start_index, start_index + gap);
+        var gap = 25;
+        me.log(["_doNestedOtherArray",start_index, other_id_array.length]);
         
+        var sliced_array = other_id_array.slice(start_index, start_index + gap);
+       
         var query = Ext.create('Rally.data.lookback.QueryFilter',{
             property: 'ObjectID', operator: 'in', value: sliced_array
         });
         query = query.and(Ext.create('Rally.data.lookback.QueryFilter',{property: '__At', operator: '=',value: 'current' }));
+        
+        query = query.and(Ext.create('Rally.data.lookback.QueryFilter',
+            {property:'Project',operator:'in',value: me.project_array}));
+            
         Ext.create('Rally.data.lookback.SnapshotStore',{
             autoLoad: true,
             limit: gap,
@@ -489,6 +502,7 @@
             filters: query,
             listeners: {
                 load: function( store, data, success ) {
+                    me.log( ["doNestedOtherArray.load",success]);
                     var data_length = data.length;
                     for ( var i=0;i<data_length;i++ ) {
                         if ( ! me.other_hash[data[i].get('ObjectID')] ) {
@@ -548,8 +562,8 @@
     },
     _doNestedOtherLeavesArray: function( type, rows, very_long_array, start_index ) {
         var me = this;
-        me.log( [ "_doNestedArray", start_index, very_long_array ] );
-        var gap = 300;
+        me.log( [ "_doNestedOtherArray", start_index, very_long_array.length ] );
+        var gap = 20;
         var sliced_array = very_long_array.slice(start_index, start_index + gap);
         
         var query = Ext.create('Rally.data.lookback.QueryFilter',{
@@ -560,6 +574,10 @@
             property: 'Children', operator: '=', value: null
         }));
         query = query.and(Ext.create('Rally.data.lookback.QueryFilter',{property: '__At', operator: '=',value: 'current' }));
+        
+        query = query.and(Ext.create('Rally.data.lookback.QueryFilter',
+            {property:'Project',operator:'in',value: me.project_array}));
+                
         Ext.create('Rally.data.lookback.SnapshotStore',{
             autoLoad: true,
             limit: gap,
@@ -567,8 +585,8 @@
             filters: query,
             listeners: {
                 load: function( store, data, success ) {
+                    me.log(["_doNestedOtherLeavesArray",success]);
                     var data_length = data.length;
-                    me.log( "load leaves snapshot" );
                     for ( var i=0;i<data_length;i++ ) {
                         // only care if this is the child of one we already got
                         if ( data[i].get('_ItemHierarchy').length > 1 ) {
@@ -584,6 +602,7 @@
                 }
             }
         });
+
     },
     _addToTimeboxFilter: function( query, value ) {
         var single_query = Ext.create('Rally.data.QueryFilter', {
@@ -651,6 +670,7 @@
     },
     _populateRowData: function( type, rows ) {
         var me = this;
+        this.showMask("Making Tables...");
         this.log( "_populateRowData: " + type );
         var filtered_rows = [];
         var item_length = rows.length;
