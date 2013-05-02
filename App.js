@@ -336,9 +336,6 @@
         }
         
         for ( var i=0; i<number_of_items_with_dependencies; i++ ) {
-            if ( data[i].get('_UnformattedID') == 19687 ) {
-                console.log (" -------- ", type, data[i].get('ObjectID'), data[i] );
-            }
             var dependent_ids = data[i].get(type);
             me.our_hash[ data[i].get('ObjectID') ] = data[i].data;
             if ( me.project_hash.hasOwnProperty(data[i].get('Project')) ) {
