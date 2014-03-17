@@ -450,7 +450,7 @@
                 _doNestedOurLeavesArray: function( type, rows, very_long_array, start_index ) {
                     var me = this;
                     me.log( [ "_doNestedOurLeavesArray", start_index, very_long_array.length ] );
-                    var gap = 1000;
+                    var gap = 3000;
                     var sliced_array = very_long_array.slice(start_index, start_index + gap);
                     
                     var query = Ext.create('Rally.data.lookback.QueryFilter',{
@@ -531,7 +531,7 @@
                 },
                 _doNestedOtherArray: function( type, rows, other_id_array, start_index ) {
                     var me = this;
-                    var gap = 1000;
+                    var gap = 3000;
                     me.log(["_doNestedOtherArray",start_index, other_id_array.length]);
                     
                     var sliced_array = other_id_array.slice(start_index, start_index + gap);
@@ -614,7 +614,7 @@
                 _doNestedOtherLeavesArray: function( type, rows, very_long_array, start_index ) {
                     var me = this;
                     me.log( [ "_doNestedOtherArray", start_index, very_long_array.length ] );
-                    var gap = 1000;
+                    var gap = 3000;
                     var sliced_array = very_long_array.slice(start_index, start_index + gap);
                     
                     var query = Ext.create('Rally.data.lookback.QueryFilter',{
