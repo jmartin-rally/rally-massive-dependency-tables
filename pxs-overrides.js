@@ -13,7 +13,12 @@
     },
     headers: { 'Content-Type': 'application/json' } 
  });
- 
+
+Ext.define('Rally.data.lookback.SnapshotRestProxyOverride', {
+    override: 'Rally.data.lookback.SnapshotRestProxy', 
+    timeout: 300000
+});
+
 Ext.override(Rally.data.lookback.SnapshotRestProxy,{
     buildRequest: function(operation) {
         var request = this.callParent(arguments);
